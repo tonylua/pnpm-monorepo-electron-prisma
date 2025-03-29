@@ -1,0 +1,78 @@
+appId: "com.electron.app"
+productName: "myApp"
+directories:
+  buildResources: "build"
+  output: "dist"
+files:
+  - "!**/.vscode/*"
+  - "!src/*"
+  - "!electron.vite.config.{js,ts,mjs,cjs}"
+  - "!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
+  - "!{.env,.env.*,.npmrc,pnpm-lock.yaml}"
+  - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}"
+  - "out/**/*"
+  - "package.json"
+  - "resources/**/*"
+  - "../../packages/common/node_modules/prisma/**/*"
+  - "../../packages/common/node_modules/@prisma/engines/**/*"
+  - "!../../packages/common/node_modules/prisma/*.db"
+  # @prisma is not needed in the packed app unless using prisma migrate
+  - "!**/node_modules/@prisma/engines/introspection-engine*"
+  - "!**/node_modules/@prisma/engines/schema-engine*"
+  - "!**/node_modules/@prisma/engines/prisma-fmt*"
+  - "!**/node_modules/@prisma/engines/query_engine-*"
+  - "!**/node_modules/@prisma/engines/libquery_engine*"
+  - "!**/node_modules/prisma/query_engine*"
+  - "!**/node_modules/prisma/libquery_engine*"
+  - "!**/node_modules/prisma/**/*.mjs"
+asarUnpack:
+  - resources/**
+extraResources: # Only if you need to run prisma migrate
+  - "../../packages/common/node_modules/@prisma/engines/**/*"
+  - from: ../../packages/common/node_modules/@prisma/engines/schema-engine-windows.exe
+    to: prisma/schema-engine-windows.exe
+  - from: ../../packages/common/node_modules/@prisma/engines/query_engine-windows.dll.node
+    to: prisma/query_engine-windows.dll.node
+  - from: ../../packages/common/src/prisma/schema.prisma
+    to: prisma/schema.prisma
+  - from: ../../packages/common/src/prisma/.env
+    to: prisma/.env
+  - from: ../../packages/common/src/prisma/migrations
+    to: prisma/migrations
+  - from: ../../packages/common/dist/storage
+    to: storage
+win:
+  executableName: myApp 
+  asarUnpack:
+    - node_modules/prisma
+    - node_modules/@prisma
+    - resources/**
+  signExts: false
+nsis:
+  artifactName: '${productName} Setup ${version}.${ext}'
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+mac:
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    - NSCameraUsageDescription: Application requests access to the device's camera.
+    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
+    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+  notarize: false
+dmg:
+  artifactName: ${name}-${version}.${ext}
+linux:
+  target:
+    - AppImage
+    - snap
+    - deb
+  maintainer: electronjs.org
+  category: Utility
+appImage:
+  artifactName: ${name}-${version}.${ext}
+npmRebuild: false
+publish:
+  provider: generic
+  url: https://example.com/auto-updates

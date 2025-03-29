@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+  engineType = "library"
+  binaryTargets = ["native", "windows"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL") 
+}
+
+model Account {
+  id              String    @id @default(uuid())
+  username        String    @unique
+  email           String?   @unique
+  threads         Thread[]
+  threadMessages  ThreadMessage[]
+  globalSetting   String?
+}
+
+model Thread {
+  id                String    @id @default(uuid())
+  name              String
+  accountId         String
+  setting           String?
+  chatProvider      String?
+  chatModel         String?
+  vectorTag         String?
+  vectorSearchMode  String?   @default("default")
+  updateTime        DateTime  @default(now()) 
+  createTime        DateTime  @default(now())
+  account           Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+}
+
+model ThreadMessage {
+  id            String   @id @default(uuid())
+  accountId     String
+  threadId      String   // No relation to prevent whole table migration
+  chatProvider  String  @default("")
+  chatModel     String  @default("")
+  prompt        String
+  promptId      String   @unique
+  response      String
+  updateTime    DateTime @default(now()) 
+  createTime    DateTime @default(now())
+  account       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+}

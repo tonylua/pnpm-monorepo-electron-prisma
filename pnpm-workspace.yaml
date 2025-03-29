@@ -1,0 +1,14 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+catalogs:
+  electron:
+    electron: 34.2.0
+  'electron-builder':
+    'electron-builder': 26.0.11
+  prisma:
+    prisma: 5.3.1
+  '@prisma/client':
+    '@prisma/client': 5.3.1
+  '@prisma/engines':
+    '@prisma/engines': 5.3.1

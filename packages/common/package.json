@@ -1,0 +1,30 @@
+{
+  "name": "@app/common",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/types.d.ts",
+  "scripts": {
+    "build": "pnpm clean && rollup src/facade.js -c rollup.config.mjs",
+    "clean": "rimraf dist",
+    "db:migrate": "dotenv -e ./src/prisma/.env.cli -- prisma migrate dev --name init --schema ./src/prisma/schema.prisma",
+    "db:generate": "dotenv -e ./src/prisma/.env.cli -- prisma generate"
+  },
+  "dependencies": {
+    "@prisma/client": "catalog:@prisma/client",
+    "@prisma/engines": "catalog:@prisma/engines",
+    "@rollup/plugin-commonjs": "^28.0.2",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.0",
+    "prisma": "catalog:prisma",
+    "rollup": "^4.34.8",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.7",
+    "dotenv-cli": "^8.0.0",
+    "rimraf": "^5.0.0",
+    "rollup-plugin-copy": "^3.5.0",
+    "typescript": "^5.3.3"
+  }
+}
