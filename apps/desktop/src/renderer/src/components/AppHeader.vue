@@ -12,7 +12,10 @@
 <script setup>
 import { computed } from 'vue'
 import { useStore } from '@renderer/stores'
-import { WindowActions } from '@main/utils/constants'
+
+const WindowActions = import.meta.env.__ELECTRON__
+  ? (await import('@main/utils/constants')).WindowActions
+  : {};
 
 const store = useStore()
 

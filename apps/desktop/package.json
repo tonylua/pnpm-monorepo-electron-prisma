@@ -1,7 +1,7 @@
 {
   "name": "@app/desktop",
   "version": "1.0.0",
-  "description": "ainow build with electron",
+  "description": "app build with electron",
   "main": "./out/main/index.js",
   "author": "example.com",
   "homepage": "https://electron-vite.org",

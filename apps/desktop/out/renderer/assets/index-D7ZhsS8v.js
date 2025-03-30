@@ -2316,6 +2316,50 @@ function resolveAsset(type, name, warnMissing = true, maybeSelfReference = false
 function resolve(registry, name) {
   return registry && (registry[name] || registry[camelize(name)] || registry[capitalize(camelize(name))]);
 }
+function renderList(source, renderItem, cache, index) {
+  let ret;
+  const cached = cache;
+  const sourceIsArray = isArray(source);
+  if (sourceIsArray || isString(source)) {
+    const sourceIsReactiveArray = sourceIsArray && isReactive(source);
+    let needsWrap = false;
+    if (sourceIsReactiveArray) {
+      needsWrap = !isShallow(source);
+      source = shallowReadArray(source);
+    }
+    ret = new Array(source.length);
+    for (let i = 0, l = source.length; i < l; i++) {
+      ret[i] = renderItem(
+        needsWrap ? toReactive(source[i]) : source[i],
+        i,
+        void 0,
+        cached
+      );
+    }
+  } else if (typeof source === "number") {
+    ret = new Array(source);
+    for (let i = 0; i < source; i++) {
+      ret[i] = renderItem(i + 1, i, void 0, cached);
+    }
+  } else if (isObject(source)) {
+    if (source[Symbol.iterator]) {
+      ret = Array.from(
+        source,
+        (item, i) => renderItem(item, i, void 0, cached)
+      );
+    } else {
+      const keys = Object.keys(source);
+      ret = new Array(keys.length);
+      for (let i = 0, l = keys.length; i < l; i++) {
+        const key = keys[i];
+        ret[i] = renderItem(source[key], key, i, cached);
+      }
+    }
+  } else {
+    ret = [];
+  }
+  return ret;
+}
 const getPublicInstance = (i) => {
   if (!i) return null;
   if (isStatefulComponent(i)) return getComponentPublicInstance(i);
@@ -6433,12 +6477,10 @@ const useStore = /* @__PURE__ */ defineStore("counter", {
     }
   }
 });
-var WindowActions = /* @__PURE__ */ ((WindowActions2) => {
-  WindowActions2[WindowActions2["MIN"] = 0] = "MIN";
-  WindowActions2[WindowActions2["MAX"] = 1] = "MAX";
-  WindowActions2[WindowActions2["CLOSE"] = 2] = "CLOSE";
-  return WindowActions2;
-})(WindowActions || {});
+(function detectScriptRel() {
+  const relList = typeof document !== "undefined" && document.createElement("link").relList;
+  return relList && relList.supports && relList.supports("modulepreload") ? "modulepreload" : "preload";
+})();
 const _export_sfc = (sfc, props) => {
   const target = sfc.__vccOpts || sfc;
   for (const [key, val] of props) {
@@ -6449,7 +6491,8 @@ const _export_sfc = (sfc, props) => {
 const _hoisted_1 = { class: "header text-white" };
 const _sfc_main$1 = {
   __name: "AppHeader",
-  setup(__props) {
+  async setup(__props) {
+    const WindowActions = {};
     const store = useStore();
     const title = computed(() => store.packageName);
     const toMin = () => window.api.windowAction(window.windowId, WindowActions.MIN);
@@ -6482,12 +6525,134 @@ const _sfc_main$1 = {
     };
   }
 };
-const AppHeader = /* @__PURE__ */ _export_sfc(_sfc_main$1, [["__scopeId", "data-v-a16e8a0e"]]);
+const AppHeader = /* @__PURE__ */ _export_sfc(_sfc_main$1, [["__scopeId", "data-v-3630b0fc"]]);
+function getDBModelProxy(modelName) {
+  return new Proxy(
+    {},
+    {
+      get(_, action) {
+        return async function(...args) {
+          const response = await window.api.persistenceAction(modelName, action, ...args);
+          return response;
+        };
+      }
+    }
+  );
+}
+function omit(obj, keysToOmit) {
+  const result = { ...obj };
+  keysToOmit.forEach((key) => {
+    if (key in result) {
+      delete result[key];
+    }
+  });
+  return result;
+}
+function getNewThreadName() {
+  const now = /* @__PURE__ */ new Date();
+  const formattedTime = `${String(now.getDate()).padStart(2, "0")}${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
+  return `Thread${formattedTime}`;
+}
+function useDB() {
+  const AccountModel = getDBModelProxy("Account");
+  const ThreadModel = getDBModelProxy("Thread");
+  const ThreadMessageModel = getDBModelProxy("ThreadMessage");
+  const getAccount = async (username) => {
+    let account = await AccountModel.get({ username });
+    if (!account) account = (await AccountModel.create(username)).account;
+    return account;
+  };
+  const createNewThread = async (account, name = getNewThreadName()) => {
+    const data = {
+      chatProvider: "foo",
+      chatModel: "bar",
+      name: ""
+    };
+    if (name) data.name = name;
+    const { thread, error } = await ThreadModel.create(
+      // 避免ipc直接传递proxy对象报错
+      { ...account },
+      data
+    );
+    if (error) throw new Error(error);
+    if (!thread) return thread;
+    const threadWithoutForeignKey = omit(thread, ["accountId"]);
+    await AccountModel.updateArrayProp(account.id, "threads", [threadWithoutForeignKey]);
+    return thread;
+  };
+  const createDefaultThread = async (account) => {
+    const currentThreadName = getNewThreadName();
+    let thread = await ThreadModel.get({ name: currentThreadName });
+    if (!thread) thread = await createNewThread(account, currentThreadName);
+    return thread;
+  };
+  const listThreads = async (account) => {
+    const threads = await ThreadModel.where({ accountId: account.id }, null, [
+      {
+        updateTime: "desc"
+      }
+    ]);
+    return threads;
+  };
+  const listThreadMessages = async (accountId, threadId, limit = null) => {
+    const messages = await ThreadMessageModel.where(
+      {
+        accountId,
+        threadId
+      },
+      limit,
+      [
+        {
+          updateTime: "desc"
+        }
+      ]
+    );
+    return messages;
+  };
+  const saveThreadMessage = async ({
+    accountId,
+    threadId,
+    prompt,
+    promptId,
+    response,
+    chatModel,
+    chatProvider
+  }) => {
+    const where = { id: threadId, accountId };
+    const thread = await ThreadModel.get(where);
+    if (!thread) throw new Error("no thread");
+    const { msg, error } = await ThreadMessageModel.create({
+      accountId: "foo",
+      threadId: thread.id,
+      prompt: prompt || "",
+      promptId,
+      response,
+      chatModel,
+      chatProvider
+    });
+    if (error) return error;
+    const account = await AccountModel.get({ id: accountId });
+    if (!account) throw new Error("get account fail");
+    const msgWithoutForeignKey = omit(msg, ["accountId"]);
+    await AccountModel.updateArrayProp(account.id, "threadMessages", [msgWithoutForeignKey]);
+    return null;
+  };
+  return {
+    getAccount,
+    listThreads,
+    listThreadMessages,
+    saveThreadMessage,
+    createNewThread,
+    createDefaultThread
+  };
+}
 const _sfc_main = /* @__PURE__ */ defineComponent({
   __name: "App",
   setup(__props) {
     const store = useStore();
     const header = ref(null);
+    const { getAccount, createNewThread, listThreads } = useDB();
+    const list = ref([]);
     onMounted(() => {
       {
         header.value = AppHeader;
@@ -6495,15 +6660,31 @@ const _sfc_main = /* @__PURE__ */ defineComponent({
         window.electron.ipcRenderer.on("set-title", (_, title) => {
           store.setPackageName(title);
         });
-        window.electron.ipcRenderer.on("db-status", (_, status) => {
+        window.electron.ipcRenderer.on("db-status", async (_, status) => {
           console.log("db is ready", status);
         });
       }
+      setTimeout(async () => {
+        const account = await getAccount("FAKE_USER");
+        if (!account) return;
+        await createNewThread(account);
+        await createNewThread(account);
+        await createNewThread(account);
+        const threads = await listThreads(account);
+        console.log(threads);
+        list.value = threads;
+      }, 1e3);
     });
     return (_ctx, _cache) => {
       return openBlock(), createElementBlock(Fragment, null, [
         (openBlock(), createBlock(resolveDynamicComponent(header.value))),
-        _cache[0] || (_cache[0] = createBaseVNode("div", null, "hello", -1))
+        createBaseVNode("ul", null, [
+          (openBlock(true), createElementBlock(Fragment, null, renderList(list.value, (thread) => {
+            return openBlock(), createElementBlock("li", {
+              key: thread.id
+            }, toDisplayString(thread.name), 1);
+          }), 128))
+        ])
       ], 64);
     };
   }

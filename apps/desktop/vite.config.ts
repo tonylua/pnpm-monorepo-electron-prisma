@@ -4,6 +4,20 @@ import { resolve } from 'path'
 import Components from 'unplugin-vue-components/vite'
 import AutoImport from 'unplugin-auto-import/vite'
 
+const emptyModulePlugin: Plugin = {
+  name: 'vite-plugin-empty-module',
+  resolveId(id) {
+    if (id.startsWith('@main/')) {
+      return id; // 返回 id 以确保后续处理
+    }
+  },
+  load(id) {
+    if (id.startsWith('@main/')) {
+      return 'export default {}'; // 返回空对象
+    }
+  }
+};
+
 export default defineConfig({
   root: resolve(__dirname, 'src/renderer'),
   resolve: {
@@ -46,6 +60,7 @@ export default defineConfig({
       dts: 'src/auto-import.d.ts'
     }),
     Components({
-    })
+    }),
+    emptyModulePlugin 
   ]
 })

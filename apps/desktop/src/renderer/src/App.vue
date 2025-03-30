@@ -2,13 +2,13 @@
 import { onMounted, ref, type Component } from 'vue'
 import { useStore } from './stores'
 import AppHeader from './components/AppHeader.vue'
-import type { Thread } from '@prisma/client'
+import type { Account, Thread } from '@prisma/client'
 import useDB from './hooks/useDB'
 
 const store = useStore()
 const header = ref<Component | null>(null)
 const { getAccount, createNewThread, listThreads } = useDB()
-const list = ref([])
+const list = ref<Thread[]>([])
 
 onMounted(() => {
   if (__WEB__) {
@@ -29,8 +29,13 @@ onMounted(() => {
     // @ts-ignore TODO
     window.electron.ipcRenderer.on('db-status', async (_, status) => {
       console.log('db is ready', status)
+    })
+  }
 
-      const account = await getAccount('FAKE_USER')
+  setTimeout(async () => {
+      const account: Account | null = await getAccount('FAKE_USER')
+
+      if (!account) return;
 
       await createNewThread(account)
       await createNewThread(account)
@@ -39,9 +44,9 @@ onMounted(() => {
       const threads: Thread[] = await listThreads(account)
       console.log(threads)
       list.value = threads
-    })
-  }
+  }, 1000);
 })
+
 </script>
 
 <template>

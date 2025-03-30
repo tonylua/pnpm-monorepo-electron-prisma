@@ -14,7 +14,7 @@
     "dev:web": "pnpm build:pkgs && concurrently \"pnpm web dev\" \"pnpm desktop dev:web\"",
     "build:pkgs": "pnpm common build", 
     "build:win": "pnpm build:pkgs && pnpm desktop build:win",
-    "build:web": "pnpm build:pkgs && pnpm web build",
+    "build:web": "pnpm build:pkgs && pnpm desktop build:web && pnpm web build",
     "preview:web": "pnpm build:web && cd apps/web/dist && npm i && node index.js",
     "init:db": "pnpm common db:migrate && pnpm common db:generate",
     "postinstall": "node ./scripts/install.js && pnpm init:db"

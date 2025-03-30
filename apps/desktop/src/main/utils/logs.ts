@@ -1,9 +1,9 @@
 import { join } from 'path'
 import dayjs from 'dayjs'
 import { app, crashReporter } from 'electron'
-import log from 'electron-log/main'
+import log from 'electron-log/main.js'
 
-log.initialize() // ~\AppData\Roaming\@ainow\desktop\logs\xxx.log
+log.initialize() // ~\AppData\Roaming\@app\desktop\logs\xxx.log
 log.errorHandler.startCatching()
 log.transports.file.resolvePathFn = () => {
   const date = dayjs().format('YYYY-MM-DD')
@@ -22,7 +22,7 @@ try {
   console.error('获取崩溃文件路径失败', e)
 }
 crashReporter.start({
-  productName: 'ainow',
+  productName: 'myApp',
   companyName: 'aaa',
   uploadToServer: false,
   ignoreSystemCrashHandler: false

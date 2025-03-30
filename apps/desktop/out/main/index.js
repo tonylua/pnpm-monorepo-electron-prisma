@@ -3,7 +3,7 @@ const electron = require("electron");
 const utils = require("@electron-toolkit/utils");
 const path = require("path");
 const dayjs = require("dayjs");
-const log = require("electron-log/main");
+const log = require("electron-log/main.js");
 const fs = require("node:fs");
 const path$1 = require("node:path");
 const commonFacade = require("@app/common");
@@ -42,7 +42,7 @@ try {
   console.error("获取崩溃文件路径失败", e);
 }
 electron.crashReporter.start({
-  productName: "ainow",
+  productName: "myApp",
   companyName: "aaa",
   uploadToServer: false,
   ignoreSystemCrashHandler: false
