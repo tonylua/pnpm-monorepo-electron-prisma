@@ -10,7 +10,8 @@ const { getPrisma, getDBConstants, DBModels, runPrismaCommand } =
 const { getAccountModel, getThreadModel, getThreadMessageModel } = DBModels
 const { dbPath, latestMigration } = getDBConstants(dbContext)
 
-const schemaPath = global.isElectronDev
+export const isDev = process.env.NODE_ENV === 'development'
+const schemaPath = isDev
   ? dbContext.getSchemaPrismaPath!()
   // @ts-ignore
   : path.join(process.resourcesPath, 'prisma', 'schema.prisma')

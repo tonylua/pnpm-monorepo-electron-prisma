@@ -50,18 +50,18 @@ electron.crashReporter.start({
 const { env } = process;
 const isEnvSet = "ELECTRON_IS_DEV" in env;
 const getFromEnv = Number.parseInt(env.ELECTRON_IS_DEV, 10) === 1;
-const isDev = isEnvSet ? getFromEnv : !electron.app.isPackaged;
+const isDev$1 = isEnvSet ? getFromEnv : !electron.app.isPackaged;
 const { DB_FILE_NAME } = commonFacade__namespace;
 const dbContext = {
-  getDBPath: () => isDev ? path$1.posix.resolve(`../../packages/common/src/storage/${DB_FILE_NAME}`) : path$1.join(electron.app.getPath("userData"), DB_FILE_NAME),
+  getDBPath: () => isDev$1 ? path$1.posix.resolve(`../../packages/common/src/storage/${DB_FILE_NAME}`) : path$1.join(electron.app.getPath("userData"), DB_FILE_NAME),
   getPrismaEnginesDir: () => electron.app.getAppPath().replace("app.asar", ""),
-  getPrismaEnginesBase: () => isDev ? "../../packages/common/node_modules/@prisma/engines/" : path$1.resolve(electron.app.getAppPath().replace("app.asar", ""), "prisma/"),
-  getSchemaPrismaPath: () => isDev ? path$1.join(
+  getPrismaEnginesBase: () => isDev$1 ? "../../packages/common/node_modules/@prisma/engines/" : path$1.resolve(electron.app.getAppPath().replace("app.asar", ""), "prisma/"),
+  getSchemaPrismaPath: () => isDev$1 ? path$1.join(
     electron.app.getAppPath().replace("app.asar", "app.asar.unpacked"),
     "../../packages/common/src/prisma/",
     "schema.prisma"
   ) : path$1.resolve(electron.app.getAppPath().replace("app.asar", ""), "prisma/schema.prisma"),
-  getPrismaPath: () => isDev ? void 0 : path$1.resolve(
+  getPrismaPath: () => isDev$1 ? void 0 : path$1.resolve(
     electron.app.getAppPath().replace("app.asar", "app.asar.unpacked"),
     "node_modules/prisma/build/index.js"
   )
@@ -69,7 +69,7 @@ const dbContext = {
 console.log(
   [
     "%c 💻 desktop db context ⌨",
-    isDev,
+    isDev$1,
     dbContext.getPrismaPath?.(),
     dbContext.getSchemaPrismaPath?.(),
     dbContext.getDBPath(),
@@ -80,7 +80,8 @@ console.log(
 const { getPrisma, getDBConstants, DBModels, runPrismaCommand } = commonFacade__namespace;
 const { getAccountModel, getThreadModel, getThreadMessageModel } = DBModels;
 const { dbPath, latestMigration } = getDBConstants(dbContext);
-const schemaPath = global.isElectronDev ? dbContext.getSchemaPrismaPath() : path$1.join(process.resourcesPath, "prisma", "schema.prisma");
+const isDev = process.env.NODE_ENV === "development";
+const schemaPath = isDev ? dbContext.getSchemaPrismaPath() : path$1.join(process.resourcesPath, "prisma", "schema.prisma");
 const prismaPath = dbContext.getPrismaPath?.();
 process.env.DATABASE_URL = `file:${dbPath}`;
 const prisma = getPrisma(dbContext);
@@ -251,7 +252,7 @@ async function createMainWindow() {
   }
   return mainWindow;
 }
-global.isElectronDev = isDev;
+global.isElectronDev = isDev$1;
 global.electronApp = electron.app;
 global.isDBReady = false;
 const winMgr = new WindowManager();

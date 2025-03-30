@@ -18,7 +18,7 @@ async function runPrismaCommand(param) {
   try {
     const exitCode = await new Promise((resolve, _) => {
       const prismaPath = param.prismaPath || ctxPrismaPath || path.resolve(__dirname, "..", "node_modules/prisma/build/index.js");
-      console.log("※Prisma path", prismaPath, mePath, qePath, dbUrl);
+      console.log("※Prisma path", prismaPath, mePath, qePath, dbUrl, ctxPrismaPath, '===');
 
       const child = fork(
         prismaPath,
