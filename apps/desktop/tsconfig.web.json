@@ -11,6 +11,7 @@
   "compilerOptions": {
     "composite": true,
     "noUnusedLocals": false,
+    "types": [],
     "baseUrl": ".",
     "paths": {
       "@/*": [

@@ -50,7 +50,7 @@ function getDBConstants(ctx) {
     isDev,
     dbPath,
     dbUrl,
-    latestMigration: '20250327030021_init',
+    latestMigration: '20250330045745_init',
     mePath: path.isAbsolute(m) ? m : path.join(extraResourcesPath, m),
     qePath: path.isAbsolute(q) ? q : path.join(extraResourcesPath, q),
     prismaPath: ctx.getPrismaPath?.()

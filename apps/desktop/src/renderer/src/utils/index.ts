@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client'
+import { Prisma } from 'db_client'
 import { type IFacade } from '@app/common'
 import { WebApiService } from './web';
 

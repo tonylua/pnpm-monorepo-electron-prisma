@@ -1,4 +1,4 @@
-import { Account, PrismaClient, Thread, ThreadMessage } from '@prisma/client'
+import { Account, PrismaClient, Thread, ThreadMessage } from 'db_client'
 
 type CreateParams = Partial<ThreadMessage> & {
   response: T

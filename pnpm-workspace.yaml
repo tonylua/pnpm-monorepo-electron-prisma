@@ -3,12 +3,12 @@ packages:
   - 'packages/*'
 catalogs:
   electron:
-    electron: 34.2.0
+    electron: 43.0.0-beta.3
   'electron-builder':
     'electron-builder': 26.0.11
   prisma:
-    prisma: 5.3.1
+    prisma: 6.19.2
   '@prisma/client':
-    '@prisma/client': 5.3.1
+    '@prisma/client': 6.19.2
   '@prisma/engines':
-    '@prisma/engines': 5.3.1
+    '@prisma/engines': 6.19.2

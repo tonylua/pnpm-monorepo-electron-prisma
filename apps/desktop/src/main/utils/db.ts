@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import type { PrismaClient } from '@prisma/client'
+import type { PrismaClient } from 'db_client'
 import type { IFacade, PrismaMigration } from '@app/common'
 import * as commonFacade from '@app/common'
 import { dbContext } from './dbContext'
@@ -58,23 +58,26 @@ export async function initDB() {
   if (!dbExists) {
     needsMigration = true
     fs.closeSync(fs.openSync(dbPath, 'w'))
-  }
-
-  try {
-    const latest: PrismaMigration[] =
-      await prisma.$queryRaw`select * from _prisma_migrations order by finished_at`
-    const mname = latest[latest.length - 1]?.migration_name
-    needsMigration = !mname.endsWith(latestMigration)
-    console.log(`db latest migration: ${mname}, want migration suffix: ${latestMigration}`)
-  } catch (e) {
-    // @ts-ignore debug
-    console.error('[db.ts SELECT *]', e, prisma?._engine?.datasourceOverrides)
-    needsMigration = true
+  } else {
+    try {
+      const latest: PrismaMigration[] =
+        await prisma.$queryRaw`select * from _prisma_migrations order by finished_at`
+      const mname = latest[latest.length - 1]?.migration_name
+      needsMigration = !mname?.endsWith(latestMigration)
+      console.log(`db latest migration: ${mname}, want migration suffix: ${latestMigration}`)
+    } catch (e) {
+      // @ts-ignore debug
+      console.error('[db.ts SELECT *]', e, prisma?._engine?.datasourceOverrides)
+      needsMigration = true
+    }
   }
   if (!needsMigration) {
     console.log(`%c Does not need migration -- ${schemaPath}`, 'color: green')
     return
   }
+
+  // Release SQLite connections before forking the migration CLI so it has exclusive write access
+  await prisma.$disconnect()
 
   try {
     console.log(
@@ -93,5 +96,7 @@ export async function initDB() {
       await runPrisma('migrate', 'deploy')
       console.error('🐝 Migration again and anain', ex)
     }
+  } finally {
+    await prisma.$connect()
   }
 }

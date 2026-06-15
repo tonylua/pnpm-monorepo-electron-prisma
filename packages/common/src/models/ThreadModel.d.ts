@@ -1,4 +1,4 @@
-import { Account, PrismaClient, Thread } from '@prisma/client'
+import { Account, PrismaClient, Thread } from 'db_client'
 
 export type GetThreadModel = <T = unknown>(
   prisma: PrismaClient

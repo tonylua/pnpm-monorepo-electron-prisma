@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from '@prisma/client'
+import { PrismaClient, Prisma } from 'db_client'
 import { DBModelsGetterMap } from './models'
 
 export interface IContextDB {

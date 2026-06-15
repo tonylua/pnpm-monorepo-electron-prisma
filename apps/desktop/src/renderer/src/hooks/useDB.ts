@@ -1,5 +1,5 @@
 import { getDBModelProxy, omit } from '@renderer/utils'
-import type { Account, Thread } from '@prisma/client'
+import type { Account, Thread } from 'db_client'
 
 function getNewThreadName() {
   const now = new Date()

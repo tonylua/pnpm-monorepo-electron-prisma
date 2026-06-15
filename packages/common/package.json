@@ -8,7 +8,7 @@
     "build": "pnpm clean && rollup src/facade.js -c rollup.config.mjs",
     "clean": "rimraf dist",
     "db:migrate": "dotenv -e ./src/prisma/.env.cli -- prisma migrate dev --name init --schema ./src/prisma/schema.prisma",
-    "db:generate": "dotenv -e ./src/prisma/.env.cli -- prisma generate"
+    "db:generate": "dotenv -e ./src/prisma/.env.cli -- prisma generate --schema ./src/prisma/schema.prisma"
   },
   "dependencies": {
     "@prisma/client": "catalog:@prisma/client",
@@ -17,6 +17,7 @@
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.0",
     "prisma": "catalog:prisma",
+    "db_client": "link:src/generated/db_client",
     "rollup": "^4.34.8",
     "uuid": "^11.0.5"
   },

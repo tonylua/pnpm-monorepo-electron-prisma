@@ -31,10 +31,7 @@ export const dbContext: IContextDB = {
   getPrismaPath: () =>
     isDev
       ? void 0
-      : path.resolve(
-          app.getAppPath().replace('app.asar', 'app.asar.unpacked'),
-          'node_modules/prisma/build/index.js'
-        )
+      : path.resolve(app.getAppPath(), 'node_modules/prisma/build/index.js')
 }
 
 console.log(

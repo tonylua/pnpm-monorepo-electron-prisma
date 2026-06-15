@@ -2,3 +2,6 @@ node_modules
 *.db
 *.db-journal
 dist
+apps/desktop/out/
+packages/common/src/generated/
+.session.vim

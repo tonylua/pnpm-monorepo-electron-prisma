@@ -2,7 +2,7 @@
 import { onMounted, ref, type Component } from 'vue'
 import { useStore } from './stores'
 import AppHeader from './components/AppHeader.vue'
-import type { Account, Thread } from '@prisma/client'
+import type { Account, Thread } from 'db_client'
 import useDB from './hooks/useDB'
 
 const store = useStore()

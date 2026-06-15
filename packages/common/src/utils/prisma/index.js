@@ -1,5 +1,5 @@
 const { join, resolve } = require('path')
-const { PrismaClient } = require('@prisma/client')
+const { PrismaClient } = require('db_client')
 const getDBConstants = require('./dbConstants')
 
 /**

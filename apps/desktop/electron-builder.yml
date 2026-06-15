@@ -4,34 +4,28 @@ directories:
   buildResources: "build"
   output: "dist"
 files:
+  - from: out
+    to: out
+    filter:
+      - "**/*"
+  - package.json
   - "!**/.vscode/*"
   - "!src/*"
   - "!electron.vite.config.{js,ts,mjs,cjs}"
   - "!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
   - "!{.env,.env.*,.npmrc,pnpm-lock.yaml}"
   - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}"
-  - "out/**/*"
-  - "package.json"
-  - "resources/**/*"
-  - "../../packages/common/node_modules/prisma/**/*"
-  - "../../packages/common/node_modules/@prisma/engines/**/*"
-  - "!../../packages/common/node_modules/prisma/*.db"
-  # @prisma is not needed in the packed app unless using prisma migrate
-  - "!**/node_modules/@prisma/engines/introspection-engine*"
-  - "!**/node_modules/@prisma/engines/schema-engine*"
-  - "!**/node_modules/@prisma/engines/prisma-fmt*"
-  - "!**/node_modules/@prisma/engines/query_engine-*"
-  - "!**/node_modules/@prisma/engines/libquery_engine*"
-  - "!**/node_modules/prisma/query_engine*"
-  - "!**/node_modules/prisma/libquery_engine*"
+  - "!**/node_modules/@prisma/engines/{introspection-engine,schema-engine,prisma-fmt,query_engine-,libquery_engine}*"
+  - "!**/node_modules/prisma/{query,libquery}_engine*"
   - "!**/node_modules/prisma/**/*.mjs"
+  - "!**/node_modules/prisma/*.db"
+  - "!**/node_modules/**/*{darwin,linux,android,freebsd,openbsd,arm64,musl_x64}*/**"
 asarUnpack:
   - resources/**
-extraResources: # Only if you need to run prisma migrate
-  - "../../packages/common/node_modules/@prisma/engines/**/*"
-  - from: ../../packages/common/node_modules/@prisma/engines/schema-engine-windows.exe
+extraResources:
+  - from: ../../node_modules/.pnpm/@prisma+engines@6.19.2/node_modules/@prisma/engines/schema-engine-windows.exe
     to: prisma/schema-engine-windows.exe
-  - from: ../../packages/common/node_modules/@prisma/engines/query_engine-windows.dll.node
+  - from: ../../node_modules/.pnpm/@prisma+engines@6.19.2/node_modules/@prisma/engines/query_engine-windows.dll.node
     to: prisma/query_engine-windows.dll.node
   - from: ../../packages/common/src/prisma/schema.prisma
     to: prisma/schema.prisma
@@ -42,11 +36,7 @@ extraResources: # Only if you need to run prisma migrate
   - from: ../../packages/common/dist/storage
     to: storage
 win:
-  executableName: myApp 
-  asarUnpack:
-    - node_modules/prisma
-    - node_modules/@prisma
-    - resources/**
+  executableName: myApp
   signExts: false
 nsis:
   artifactName: '${productName} Setup ${version}.${ext}'
