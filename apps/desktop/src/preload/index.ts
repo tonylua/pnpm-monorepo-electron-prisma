@@ -1,13 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import { WindowActions } from '../main/utils/constants'
 
 const api = {
   setTitle: (title: string) => ipcRenderer.send('set-title', title),
   dbStatus: (status: boolean) => ipcRenderer.send('db-status', status),
-  windowAction: (windowId: number, action: WindowActions) => {
-    ipcRenderer.send('window-action', windowId, action)
-  },
   persistenceAction: (model: string, action: string, ...args) =>
     ipcRenderer.invoke('llm:persistence-action', model, action, ...args),
 }

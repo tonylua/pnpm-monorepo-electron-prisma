@@ -34,8 +34,7 @@ export default defineConfig({
     server: {
     },
     define: {
-      __ELECTRON__: true,
-      __WEB__: false
+      __ELECTRON__: true
     },
     plugins: [
       vue(),

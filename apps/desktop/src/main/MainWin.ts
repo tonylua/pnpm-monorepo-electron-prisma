@@ -1,15 +1,13 @@
-import { shell, BrowserWindow } from 'electron'
-import { is } from '@electron-toolkit/utils'
-import { join } from 'path'
+import { shell, BrowserWindow } from "electron";
+import { is } from "@electron-toolkit/utils";
+import { join } from "path";
 import {
   MAIN_WINDOW_HEIGHT,
   MAIN_WINDOW_WIDTH,
   MINI_WINDOW_HEIGHT,
-  MINI_WINDOW_WIDTH
-} from './utils/constants'
-import WindowManager from './utils/WindowManager'
-
-const winMgr = new WindowManager()
+  MINI_WINDOW_WIDTH,
+} from "./utils/constants";
+import { displayName } from "../../../../package.json";
 
 export async function createMainWindow() {
   const mainWindow = new BrowserWindow({
@@ -20,38 +18,41 @@ export async function createMainWindow() {
     show: false,
     autoHideMenuBar: true,
     useContentSize: true,
-    frame: false,
-    title: 'mainwindow',
+    frame: true,
+    title: displayName,
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
-    }
-  })
+      preload: join(__dirname, "../preload/index.js"),
+      sandbox: false,
+    },
+  });
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
-    return { action: 'deny' }
-  })
-  global.mainWindow = mainWindow
-  winMgr.register(mainWindow)
+    shell.openExternal(details.url);
+    return { action: "deny" };
+  });
+  global.mainWindow = mainWindow;
 
-  mainWindow.on('ready-to-show', () => {
-    const args = process.argv.slice(1)
-    mainWindow.show()
-  })
+  mainWindow.webContents.on("did-finish-load", () => {
+    mainWindow.webContents.send("set-title", displayName);
 
-  mainWindow.on('close', (e) => {
-    if (!global.isQuitFromTray) {
-      e.preventDefault()
-      mainWindow.setSkipTaskbar(true)
-      mainWindow.hide()
+    function sendDBStatus() {
+      mainWindow.webContents.send("db-status", global.isDBReady);
+      if (global.isDBReady) return;
+      setTimeout(sendDBStatus, 500);
     }
-  })
+    sendDBStatus();
+  });
 
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  mainWindow.on("ready-to-show", () => {
+    mainWindow.show();
+  });
+
+  mainWindow.on("close", () => {});
+
+  if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {
+    mainWindow.loadURL(process.env["ELECTRON_RENDERER_URL"]);
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
 
-  return mainWindow
+  return mainWindow;
 }

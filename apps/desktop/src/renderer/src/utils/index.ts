@@ -1,8 +1,5 @@
 import { Prisma } from 'db_client'
 import { type IFacade } from '@app/common'
-import { WebApiService } from './web';
-
-const api = new WebApiService;
 
 export function getDBModelProxy<T extends Prisma.ModelName>(modelName: Prisma.ModelName) {
   return new Proxy(
@@ -10,10 +7,7 @@ export function getDBModelProxy<T extends Prisma.ModelName>(modelName: Prisma.Mo
     {
       get(_, action: string) {
         return async function (...args) {
-          const response = __ELECTRON__
-            ? await window.api.persistenceAction(modelName, action, ...args)
-            : await api.persistenceAction(modelName, action, args)
-          return response
+          return await window.api.persistenceAction(modelName, action, ...args)
         }
       }
     }

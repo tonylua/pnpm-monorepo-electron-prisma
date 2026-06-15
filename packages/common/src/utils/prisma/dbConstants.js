@@ -1,13 +1,5 @@
 const path = require('path')
 
-function getPlatformName() {
-  const isDarwin = process.platform === 'darwin'
-  if (isDarwin && process.arch === 'arm64') {
-    return process.platform + 'Arm64'
-  }
-  return process.platform
-}
-
 /**
  * @type {import('../../types').TypeGetDBConstants}
  */
@@ -20,25 +12,10 @@ function getDBConstants(ctx) {
 
   const getEnginesPath = (fileName) => path.join(ctx.getPrismaEnginesBase?.(), fileName)
   const executables = {
-    win32: {
-      migrationEngine: getEnginesPath('schema-engine-windows.exe'),
-      queryEngine: getEnginesPath('query_engine-windows.dll.node')
-    },
-    linux: {
-      migrationEngine: getEnginesPath('schema-engine-debian-openssl-1.1.x'),
-      queryEngine: getEnginesPath('libquery_engine-debian-openssl-1.1.x.so.node')
-    },
-    darwin: {
-      migrationEngine: getEnginesPath('schema-engine-darwin'),
-      queryEngine: getEnginesPath('libquery_engine-darwin.dylib.node')
-    },
-    darwinArm64: {
-      migrationEngine: getEnginesPath('schema-engine-darwin-arm64'),
-      queryEngine: getEnginesPath('libquery_engine-darwin-arm64.dylib.node')
-    }
-  }[getPlatformName()]
+    migrationEngine: getEnginesPath('schema-engine-windows.exe'),
+    queryEngine: getEnginesPath('query_engine-windows.dll.node')
+  }
 
-  // 受到 package.json/electron-builder.yml 中 extraResources 字段的影响
   const extraResourcesPath = ctx.getPrismaEnginesDir()
   const { migrationEngine: m, queryEngine: q } = executables
 

@@ -8,7 +8,6 @@ declare module '*.vue' {
 }
 
 declare const __ELECTRON__: boolean
-declare const __WEB__: boolean
 // @ts-nocheck
 interface Window {
   api: any // TODO: specify the correct type
