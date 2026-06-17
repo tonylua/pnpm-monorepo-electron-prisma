@@ -12,3 +12,5 @@ catalogs:
     '@prisma/client': 6.19.2
   '@prisma/engines':
     '@prisma/engines': 6.19.2
+  vite:
+    vite: 8.0.16

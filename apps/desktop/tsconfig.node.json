@@ -9,6 +9,9 @@
   "compilerOptions": {
     "composite": true,
     "noUnusedLocals": false,
+    // vite 8 / @vitejs/plugin-vue 6 只暴露现代条件导出，旧的 "node" 解析无法识别其类型。
+    // 切到 "bundler" 以兼容（升级 vite8/electron-vite6 时引入）。
+    "moduleResolution": "bundler",
     "types": [
       "electron-vite/node"
     ]

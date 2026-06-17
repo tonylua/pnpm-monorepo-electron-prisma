@@ -1,23 +1,25 @@
 import { resolve } from 'path'
-import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
+import { defineConfig } from 'electron-vite'
 import vue from '@vitejs/plugin-vue'
 import Components from 'unplugin-vue-components/vite'
 import AutoImport from 'unplugin-auto-import/vite'
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
     resolve: {
       alias: {
         '@': resolve('src'),
         '@renderer': resolve('src/renderer/src'),
         '@main': resolve('src/main')
       }
+    },
+    build: {
+      externalizeDeps: true
     }
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
     build: {
+      externalizeDeps: true,
       lib: {
         entry: ['src/preload/index.ts']
       }
