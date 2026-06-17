@@ -37,6 +37,8 @@ extraResources:
 win:
   executableName: myApp
   signExts: false
+  signtoolOptions:
+    sign: ./sign-noop.cjs
 nsis:
   artifactName: '${productName} Setup ${version}.${ext}'
   shortcutName: ${productName}
