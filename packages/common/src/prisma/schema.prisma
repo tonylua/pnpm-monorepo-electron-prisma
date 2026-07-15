@@ -1,13 +1,12 @@
 generator client {
-  provider = "prisma-client-js"
-  engineType = "library"
-  binaryTargets = ["native", "windows"]
-  output = "../generated/db_client"
+  provider            = "prisma-client"
+  output              = "../generated/db_client"
+  runtime             = "nodejs"
+  importFileExtension = ""
 }
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL") 
 }
 
 model Account {
@@ -28,7 +27,7 @@ model Thread {
   chatModel         String?
   vectorTag         String?
   vectorSearchMode  String?   @default("default")
-  updateTime        DateTime  @default(now()) 
+  updateTime        DateTime  @default(now())
   createTime        DateTime  @default(now())
   account           Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
@@ -44,7 +43,7 @@ model ThreadMessage {
   prompt        String
   promptId      String   @unique
   response      String
-  updateTime    DateTime @default(now()) 
+  updateTime    DateTime @default(now())
   createTime    DateTime @default(now())
   account       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
 

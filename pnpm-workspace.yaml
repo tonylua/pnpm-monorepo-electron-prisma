@@ -7,10 +7,10 @@ catalogs:
   'electron-builder':
     'electron-builder': 26.0.11
   prisma:
-    prisma: 6.19.2
+    prisma: 7.8.0
   '@prisma/client':
-    '@prisma/client': 6.19.2
-  '@prisma/engines':
-    '@prisma/engines': 6.19.2
+    '@prisma/client': 7.8.0
+  '@prisma/driver-adapter-utils':
+    '@prisma/driver-adapter-utils': 7.8.0
   vite:
     vite: 8.0.16

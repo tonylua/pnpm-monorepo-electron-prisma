@@ -1,69 +1,125 @@
-const { fork } = require("child_process");
-const path = require("path");
-const getDBConstants = require("./dbConstants");
+const fs = require('node:fs')
+const path = require('node:path')
+const crypto = require('node:crypto')
+const { DatabaseSync } = require('node:sqlite')
+const getDBConstants = require('./dbConstants')
+
+// Prisma 7 is Rust-free: there is no schema-engine binary and no way to fork the
+// old `prisma migrate deploy` CLI in a packaged app without shipping the engines.
+// Instead we apply the generated migration.sql files directly through node:sqlite,
+// tracking applied migrations in the standard `_prisma_migrations` table so that
+// db.ts's `select * from _prisma_migrations` check keeps working unchanged.
+
+const MIGRATIONS_TABLE_DDL = `
+CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
+  "id"                    TEXT PRIMARY KEY NOT NULL,
+  "checksum"              TEXT NOT NULL,
+  "finished_at"           DATETIME,
+  "migration_name"        TEXT NOT NULL,
+  "logs"                  TEXT,
+  "rolled_back_at"        DATETIME,
+  "started_at"            DATETIME NOT NULL DEFAULT current_timestamp,
+  "applied_steps_count"   INTEGER UNSIGNED NOT NULL DEFAULT 0
+)`
 
 /**
+ * Locate the migrations directory. In dev it lives next to the schema; in a
+ * packaged app it is shipped via electron-builder extraResources to
+ * resources/prisma/migrations.
+ */
+function resolveMigrationsDir(ctx) {
+  if (typeof ctx.getMigrationsDir === 'function') {
+    const dir = ctx.getMigrationsDir()
+    if (dir && fs.existsSync(dir)) return dir
+  }
+  // dev fallback: schema sibling
+  if (typeof ctx.getSchemaPrismaPath === 'function') {
+    const schemaPath = ctx.getSchemaPrismaPath()
+    if (schemaPath) {
+      const dir = path.join(path.dirname(schemaPath), 'migrations')
+      if (fs.existsSync(dir)) return dir
+    }
+  }
+  // packaged fallback
+  if (process.resourcesPath) {
+    const dir = path.join(process.resourcesPath, 'prisma', 'migrations')
+    if (fs.existsSync(dir)) return dir
+  }
+  throw new Error('runPrismaCommand: could not locate migrations directory')
+}
+
+/** Read migration folders in lexicographic (== chronological) order. */
+function listMigrations(migrationsDir) {
+  return fs
+    .readdirSync(migrationsDir)
+    .filter((name) => {
+      const full = path.join(migrationsDir, name)
+      return (
+        fs.statSync(full).isDirectory() &&
+        fs.existsSync(path.join(full, 'migration.sql'))
+      )
+    })
+    .sort()
+}
+
+function checksum(sql) {
+  return crypto.createHash('sha256').update(sql, 'utf8').digest('hex')
+}
+
+/**
+ * Apply all pending migrations directly against the SQLite database.
+ * Idempotent: migrations already recorded in `_prisma_migrations` are skipped.
+ *
  * @type {import('../../types').TypeRunPrismaCommand}
  */
 async function runPrismaCommand(param) {
+  const { ctx } = param
+  const { dbPath, dbUrl } = getDBConstants(ctx)
 
-  const { command, ctx } = param
-  const { mePath, qePath, dbUrl, prismaPath: ctxPrismaPath } = getDBConstants(ctx);
-  console.log("Migration engine path", mePath);
-  console.log("Query engine path", qePath);
+  const target = dbPath || dbUrl.replace(/^file:/, '')
+  const migrationsDir = resolveMigrationsDir(ctx)
+  const migrations = listMigrations(migrationsDir)
 
-  // Currently we don't have any direct method to invoke prisma migration programatically.
-  // As a workaround, we spawn migration script as a child process and wait for its completion.
-  // Please also refer to the following GitHub issue: https://github.com/prisma/prisma/issues/4703
+  const db = new DatabaseSync(target)
   try {
-    const exitCode = await new Promise((resolve, _) => {
-      const prismaPath = param.prismaPath || ctxPrismaPath || path.resolve(__dirname, "..", "node_modules/prisma/build/index.js");
-      console.log("※Prisma path", prismaPath, mePath, qePath, dbUrl, ctxPrismaPath, '===');
+    db.exec('PRAGMA foreign_keys = OFF')
+    db.exec(MIGRATIONS_TABLE_DDL)
 
-      const child = fork(
-        prismaPath,
-        command,
-        {
-          env: {
-            ...process.env,
-            DATABASE_URL: dbUrl,
-            PRISMA_SCHEMA_ENGINE_BINARY: mePath,
-            PRISMA_QUERY_ENGINE_LIBRARY: qePath,
-            PRISMA_FMT_BINARY: qePath,
-            PRISMA_INTROSPECTION_ENGINE_BINARY: qePath
-          },
-          stdio: "pipe"
-        }
-      );
+    const appliedRows = db
+      .prepare('SELECT migration_name FROM "_prisma_migrations" WHERE rolled_back_at IS NULL')
+      .all()
+    const applied = new Set(appliedRows.map((r) => r.migration_name))
 
-      child.on("message", msg => {
-        console.log(msg);
-      })
+    for (const name of migrations) {
+      if (applied.has(name)) {
+        console.log(`  ✓ migration already applied: ${name}`)
+        continue
+      }
+      const sqlPath = path.join(migrationsDir, name, 'migration.sql')
+      const sql = fs.readFileSync(sqlPath, 'utf8')
+      console.log(`  → applying migration: ${name}`)
 
-      child.on("error", err => {
-        console.error("Child process got error:", err);
-      });
+      const startedAt = new Date().toISOString()
+      db.exec('BEGIN')
+      try {
+        db.exec(sql)
+        db.prepare(
+          `INSERT INTO "_prisma_migrations"
+             (id, checksum, finished_at, migration_name, logs, started_at, applied_steps_count)
+           VALUES (?, ?, ?, ?, NULL, ?, 1)`
+        ).run(crypto.randomUUID(), checksum(sql), new Date().toISOString(), name, startedAt)
+        db.exec('COMMIT')
+      } catch (e) {
+        db.exec('ROLLBACK')
+        throw new Error(`migration ${name} failed: ${e.message}`)
+      }
+    }
 
-      child.on("close", (code, signal) => {
-        resolve(code);
-      })
-
-      child.stdout?.on('data',function(data){
-        console.log("prisma: ", data.toString());
-      });
-
-      child.stderr?.on('data',function(data){
-        console.error("prisma: ", data.toString());
-      });
-    });
-
-    if (exitCode !== 0) throw Error(`command ${command} failed with exit code ${exitCode}`);
-
-    return exitCode;
-  } catch (e) {
-    console.error(e);
-    throw e;
+    db.exec('PRAGMA foreign_keys = ON')
+    return 0
+  } finally {
+    db.close()
   }
 }
 
-module.exports = runPrismaCommand;
+module.exports = runPrismaCommand

@@ -1,5 +1,5 @@
 import { getDBModelProxy, omit } from '@renderer/utils'
-import type { Account, Thread } from 'db_client'
+import type { Account, Thread } from '@app/common'
 
 function getNewThreadName() {
   const now = new Date()

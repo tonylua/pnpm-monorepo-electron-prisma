@@ -1,12 +1,17 @@
-import { PrismaClient, Prisma } from 'db_client'
+import { PrismaClient, Prisma } from './generated/db_client/client'
 import { DBModelsGetterMap } from './models'
+
+// Re-export the generated client type so consumers import it from '@app/common'
+// instead of reaching into the generated output directory.
+export type { PrismaClient, Prisma }
 
 export interface IContextDB {
   getDBPath(): string
-  getPrismaEnginesDir(): string
-  getPrismaEnginesBase?: () => string
+  // Directory containing the Prisma migration folders (each with a migration.sql).
+  // In dev this is the schema sibling; in a packaged app it is shipped via
+  // electron-builder extraResources to resources/prisma/migrations.
+  getMigrationsDir?: () => string
   getSchemaPrismaPath?: () => string
-  getPrismaPath?: () => string | undefined
   getEnvPath?: () => string
 }
 
@@ -26,9 +31,6 @@ export type TypeDBConstants = {
   dbPath: string
   dbUrl: string
   latestMigration: string
-  mePath: string
-  qePath: string
-  prismaPath?: string
 }
 
 export type TypeGetPrisma = (ctx: IContextDB) => PrismaClient
@@ -40,9 +42,7 @@ export type TypeDBModels = {
 }
 
 export type RunPrismaCmdParam = {
-  command: string[]
   ctx: IContextDB
-  prismaPath?: string
 }
 export type TypeRunPrismaCommand = (param: RunPrismaCmdParam) => Promise<number>
 
@@ -50,6 +50,6 @@ export interface IFacade {
   getPrisma: TypeGetPrisma
   getDBConstants: TypeGetDBConstants
   DBModels: TypeDBModels
-  DB_FILE_NAME: string;
+  DB_FILE_NAME: string
   runPrismaCommand: TypeRunPrismaCommand
 }

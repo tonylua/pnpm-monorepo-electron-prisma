@@ -1,5 +1,6 @@
 const { join, resolve } = require('path')
-const { PrismaClient } = require('db_client')
+const { PrismaClient } = require('../../generated/db_client/client')
+const { PrismaNodeSqlite } = require('./nodeSqliteAdapter')
 const getDBConstants = require('./dbConstants')
 
 /**
@@ -22,26 +23,18 @@ function getPrisma(ctx) {
   }
   require('dotenv').config({ path: envPath })
 
-  const { dbUrl, qePath } = getDBConstants(ctx) // 晚于env调用
+  const { dbUrl } = getDBConstants(ctx) // 晚于env调用
+
+  // Prisma 7 is Rust-free: connect through a driver adapter instead of a query
+  // engine binary. We use our node:sqlite adapter (Node 24 / Electron 43 built-in),
+  // so the packaged app ships zero native SQLite dependencies. See nodeSqliteAdapter.js.
+  const adapter = new PrismaNodeSqlite({ url: dbUrl })
+
   const option = {
-    log: ['error', 'info', 'warn'],
-    __internal: {
-      engine: {
-        binaryPath: qePath
-      }
-    }
+    adapter,
+    log: ['error', 'info', 'warn']
   }
-  if (!isDev) {
-    option.datasources = {
-      db: {
-        url: dbUrl
-      }
-    }
-  }
-  console.log(
-    ['%c ￥@app/common::getPrisma￥', envPath, dbUrl, qePath].join('\n'),
-    'color: yellow'
-  )
+  console.log(['%c ￥@app/common::getPrisma￥', envPath, dbUrl].join('\n'), 'color: yellow')
 
   const prisma = new PrismaClient(option)
 

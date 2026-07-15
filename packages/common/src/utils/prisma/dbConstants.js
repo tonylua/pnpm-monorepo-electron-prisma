@@ -10,27 +10,19 @@ function getDBConstants(ctx) {
   const dbUrl = process.env.DATABASE_URL || 'file:' + dbPath
   process.env.DATABASE_URL = dbUrl
 
-  const getEnginesPath = (fileName) => path.join(ctx.getPrismaEnginesBase?.(), fileName)
-  const executables = {
-    migrationEngine: getEnginesPath('schema-engine-windows.exe'),
-    queryEngine: getEnginesPath('query_engine-windows.dll.node')
-  }
-
-  const extraResourcesPath = ctx.getPrismaEnginesDir()
-  const { migrationEngine: m, queryEngine: q } = executables
-
   if (!global.hasLastMigWarned) {
     console.log('%c ⚠!!! 每次创建 migration 后更新 latestMigration 常量 !!!⚠', 'color: yellow')
     global.hasLastMigWarned = true
   }
+
   return {
     isDev,
     dbPath,
     dbUrl,
-    latestMigration: '20250330045745_init',
-    mePath: path.isAbsolute(m) ? m : path.join(extraResourcesPath, m),
-    qePath: path.isAbsolute(q) ? q : path.join(extraResourcesPath, q),
-    prismaPath: ctx.getPrismaPath?.()
+    // Bump this after every `prisma migrate dev` so initDB knows a newer
+    // migration needs applying. Must match the newest folder in
+    // src/prisma/migrations (suffix compared in db.ts initDB).
+    latestMigration: '20250330045745_init'
   }
 }
 

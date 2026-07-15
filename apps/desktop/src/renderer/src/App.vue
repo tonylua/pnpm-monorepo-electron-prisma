@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useStore } from './stores'
-import type { Account, Thread } from 'db_client'
+import type { Account, Thread } from '@app/common'
 import useDB from './hooks/useDB'
 
 const store = useStore()

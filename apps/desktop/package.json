@@ -22,7 +22,6 @@
     "@electron-toolkit/preload": "^3.0.0",
     "@electron-toolkit/utils": "^3.0.0",
     "@prisma/client": "catalog:@prisma/client",
-    "db_client": "file:../../packages/common/src/generated/db_client",
     "dayjs": "^1.11.13",
     "destr": "^2.0.5",
     "dotenv": "^16.4.7",

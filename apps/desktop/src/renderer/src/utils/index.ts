@@ -1,4 +1,4 @@
-import { Prisma } from 'db_client'
+import type { Prisma } from '@app/common'
 import { type IFacade } from '@app/common'
 
 export function getDBModelProxy<T extends Prisma.ModelName>(modelName: Prisma.ModelName) {

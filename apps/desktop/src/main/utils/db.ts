@@ -1,6 +1,5 @@
 import fs from 'node:fs'
-import path from 'node:path'
-import type { PrismaClient } from 'db_client'
+import type { PrismaClient } from '@app/common'
 import type { IFacade, PrismaMigration } from '@app/common'
 import * as commonFacade from '@app/common'
 import { dbContext } from './dbContext'
@@ -11,11 +10,6 @@ const { getAccountModel, getThreadModel, getThreadMessageModel } = DBModels
 const { dbPath, latestMigration } = getDBConstants(dbContext)
 
 export const isDev = process.env.NODE_ENV === 'development'
-const schemaPath = isDev
-  ? dbContext.getSchemaPrismaPath!()
-  // @ts-ignore
-  : path.join(process.resourcesPath, 'prisma', 'schema.prisma')
-const prismaPath = dbContext.getPrismaPath?.()
 
 process.env.DATABASE_URL = `file:${dbPath}`
 const prisma: PrismaClient = getPrisma(dbContext)
@@ -26,12 +20,10 @@ const modelsFactory = {
   ThreadMessage: getThreadMessageModel
 }
 
-const runPrisma = (...args: string[]) =>
-  runPrismaCommand({
-    ctx: dbContext,
-    command: [...args, '--schema', schemaPath],
-    prismaPath
-  })
+// Prisma 7 is Rust-free: migrations are applied by executing the generated
+// migration.sql files directly through node:sqlite (see @app/common
+// runPrismaCommand), not by forking the Prisma CLI.
+const runPrisma = () => runPrismaCommand({ ctx: dbContext })
 
 
 export async function handlePersistenceAction(
@@ -72,30 +64,20 @@ export async function initDB() {
     }
   }
   if (!needsMigration) {
-    console.log(`%c Does not need migration -- ${schemaPath}`, 'color: green')
+    console.log('%c Does not need migration', 'color: green')
     return
   }
 
-  // Release SQLite connections before forking the migration CLI so it has exclusive write access
+  // Release the SQLite connection so the migration runner has exclusive write access.
   await prisma.$disconnect()
 
   try {
-    console.log(
-      `%c Needs a migration. Running prisma migrate with schema path ${schemaPath}`,
-      'color: red'
-    )
-    await runPrisma('migrate', 'deploy')
+    console.log('%c Needs a migration. Applying migration.sql files directly.', 'color: red')
+    await runPrisma()
     console.log('√ Migration done.')
   } catch (e) {
     console.error('× Migration failed.', e)
-    try {
-      await runPrisma('migrate', 'reset', '--force')
-      await runPrisma('migrate', 'deploy')
-      console.log('Migration reset.')
-    } catch (ex) {
-      await runPrisma('migrate', 'deploy')
-      console.error('🐝 Migration again and anain', ex)
-    }
+    throw e
   } finally {
     await prisma.$connect()
   }

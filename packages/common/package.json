@@ -5,27 +5,23 @@
   "main": "dist/index.js",
   "types": "dist/types.d.ts",
   "scripts": {
-    "build": "pnpm clean && rollup src/facade.js -c rollup.config.mjs",
+    "build": "pnpm clean && pnpm db:generate && node build.mjs",
     "clean": "rimraf dist",
-    "db:migrate": "dotenv -e ./src/prisma/.env.cli -- prisma migrate dev --name init --schema ./src/prisma/schema.prisma",
-    "db:generate": "dotenv -e ./src/prisma/.env.cli -- prisma generate --schema ./src/prisma/schema.prisma"
+    "db:migrate": "prisma migrate dev --name init",
+    "db:generate": "prisma generate"
   },
   "dependencies": {
     "@prisma/client": "catalog:@prisma/client",
-    "@prisma/engines": "catalog:@prisma/engines",
-    "@rollup/plugin-commonjs": "^28.0.2",
-    "@rollup/plugin-json": "^6.1.0",
-    "@rollup/plugin-node-resolve": "^16.0.0",
-    "prisma": "catalog:prisma",
-    "db_client": "link:src/generated/db_client",
-    "rollup": "^4.34.8",
+    "@prisma/driver-adapter-utils": "catalog:@prisma/driver-adapter-utils",
     "uuid": "^11.0.5"
   },
   "devDependencies": {
+    "@prisma/config": "7.8.0",
     "dotenv": "^16.4.7",
     "dotenv-cli": "^8.0.0",
+    "esbuild": "^0.25.0",
+    "prisma": "catalog:prisma",
     "rimraf": "^5.0.0",
-    "rollup-plugin-copy": "^3.5.0",
     "typescript": "^5.3.3"
   }
 }
