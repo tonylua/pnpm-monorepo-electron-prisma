@@ -82,21 +82,44 @@ async function runPrismaCommand(param) {
 
   const db = new DatabaseSync(target)
   try {
+    // Wait-and-retry on lock contention instead of failing fast: the runtime
+    // adapter connection may still be closing when we open this one at startup.
+    db.exec('PRAGMA busy_timeout = 5000')
+    // WAL persists in the DB file header, so setting it once (here, often the
+    // first connection to a fresh DB) applies to every later connection too.
+    // It lets readers and a writer coexist instead of blocking each other.
+    db.exec('PRAGMA journal_mode = WAL')
+    // FKs are enforced per-connection; disabling here lets migration DDL create
+    // tables in any order without tripping FK checks. This connection is closed
+    // right after, so we don't re-enable it (the runtime adapter sets its own).
     db.exec('PRAGMA foreign_keys = OFF')
     db.exec(MIGRATIONS_TABLE_DDL)
 
     const appliedRows = db
-      .prepare('SELECT migration_name FROM "_prisma_migrations" WHERE rolled_back_at IS NULL')
+      .prepare('SELECT migration_name, checksum FROM "_prisma_migrations" WHERE rolled_back_at IS NULL')
       .all()
-    const applied = new Set(appliedRows.map((r) => r.migration_name))
+    const applied = new Map(appliedRows.map((r) => [r.migration_name, r.checksum]))
 
     for (const name of migrations) {
+      const sqlPath = path.join(migrationsDir, name, 'migration.sql')
+      const sql = fs.readFileSync(sqlPath, 'utf8')
+      const sum = checksum(sql)
+
       if (applied.has(name)) {
+        // Drift guard: an already-applied migration whose file was edited means
+        // the DB and the schema history have diverged. Fail loudly instead of
+        // silently skipping — this is the one consistency check we opt into.
+        const recorded = applied.get(name)
+        if (recorded && recorded !== sum) {
+          throw new Error(
+            `migration ${name} checksum mismatch: recorded ${recorded}, file ${sum}. ` +
+              `The applied migration file was modified after it ran. ` +
+              `Restore the original migration.sql or create a new migration instead of editing this one.`
+          )
+        }
         console.log(`  ✓ migration already applied: ${name}`)
         continue
       }
-      const sqlPath = path.join(migrationsDir, name, 'migration.sql')
-      const sql = fs.readFileSync(sqlPath, 'utf8')
       console.log(`  → applying migration: ${name}`)
 
       const startedAt = new Date().toISOString()
@@ -107,7 +130,7 @@ async function runPrismaCommand(param) {
           `INSERT INTO "_prisma_migrations"
              (id, checksum, finished_at, migration_name, logs, started_at, applied_steps_count)
            VALUES (?, ?, ?, ?, NULL, ?, 1)`
-        ).run(crypto.randomUUID(), checksum(sql), new Date().toISOString(), name, startedAt)
+        ).run(crypto.randomUUID(), sum, new Date().toISOString(), name, startedAt)
         db.exec('COMMIT')
       } catch (e) {
         db.exec('ROLLBACK')
@@ -115,7 +138,6 @@ async function runPrismaCommand(param) {
       }
     }
 
-    db.exec('PRAGMA foreign_keys = ON')
     return 0
   } finally {
     db.close()

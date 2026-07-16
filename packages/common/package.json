@@ -8,7 +8,8 @@
     "build": "pnpm clean && pnpm db:generate && node build.mjs",
     "clean": "rimraf dist",
     "db:migrate": "prisma migrate dev --name init",
-    "db:generate": "prisma generate"
+    "db:generate": "prisma generate",
+    "test": "node --test"
   },
   "dependencies": {
     "@prisma/client": "catalog:@prisma/client",
@@ -20,6 +21,7 @@
     "dotenv": "^16.4.7",
     "dotenv-cli": "^8.0.0",
     "esbuild": "^0.25.0",
+    "fast-check": "^4.8.0",
     "prisma": "catalog:prisma",
     "rimraf": "^5.0.0",
     "typescript": "^5.3.3"

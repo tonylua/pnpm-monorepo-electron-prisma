@@ -110,7 +110,7 @@ SQLite 扩展码常量：`2067`=UNIQUE、`1555`=PRIMARYKEY、`787`=FOREIGNKEY、
 **好处**：不随包塞 schema-engine + prisma CLI；无子进程（无环境变量/路径/权限坑）；启动更快；迁移逻辑透明。
 
 **代价/风险**：
-- 只做向前 apply，不做 Prisma 官方那种 drift/checksum 一致性校验（对桌面 app 单向 schema 演进够用）
+- **checksum 算了但从不校验**（见第 9 节偏差 M2）——只做向前 apply，不做 Prisma 官方那种 drift/checksum 一致性校验（对桌面 app 单向 schema 演进够用）
 - migration.sql 必须是可直接执行的纯 SQL（SQLite 天然如此）
 - `_prisma_migrations` 表结构需自行维护正确
 - 开发期建迁移（`prisma migrate dev`）仍用官方 CLI —— 不变也不应变
@@ -191,3 +191,99 @@ node:sqlite 可用、迁移建库、CREATE、findMany、关系+DateTime、includ
 若 node:sqlite 出问题（它仍是 experimental）：回退到官方 `@prisma/adapter-better-sqlite3`，
 adapter 上层代码几乎不变（只换 factory + 加原生 rebuild/asarUnpack），因为本方案的转换逻辑
 就是从官方 adapter 移植的。
+
+---
+
+## 9. 官方 7.8.0 对照与已知偏差
+
+`nodeSqliteAdapter.js` 声称逐行移植官方 `@prisma/adapter-better-sqlite3` v7.8.0。
+已把官方源码下载到 `docs/prisma7-adapter-ref/`（Apache-2.0，只读留档，来源见该目录 README），
+并对 `conversion.ts` / `errors.ts` / `better-sqlite3.ts` / `driver-adapter-utils` 接口逐行对照。
+
+### 9.1 移植保真度：高
+
+转换逻辑几乎逐字一致：`mapDeclType` / `getColumnTypes` / `inferColumnType` / `mapRow` /
+`mapArg` / `ColumnTypeEnum` 数值、事务/savepoint/mutex 结构全部对得上。合理且正确的差异：
+
+| 官方（better-sqlite3） | 本仓库（node:sqlite） | 评价 |
+|---|---|---|
+| `stmt.reader` 判断是否返回行 | `stmt.columns().length===0` + try/catch | 语义等价替代 |
+| `db.defaultSafeIntegers(true)`（连接级） | `stmt.setReadBigInts(true)`（语句级） | 正确对应 |
+| `error.code` 字符串码 | `error.errcode` 整数码 + 字符串回退 | 正确且更稳 |
+| `inferObjectType` 只认 `ArrayBuffer` | **加认 `Uint8Array`** | 比官方更对（见下） |
+
+两处本仓库优于官方 7.8.0，**保留、勿改**：
+- **读 BLOB**：node:sqlite 的 BLOB 是 `Uint8Array`，官方只处理 `ArrayBuffer`；本仓库补的
+  `Uint8Array` 分支是必须的（`nodeSqliteAdapter.js:135`、`171`）。
+- **startTransaction mutex**：官方 `BEGIN` 抛错时 `release` 不会被调用（7.8.0 有 mutex 泄漏），
+  本仓库在 catch 里先 `unlock()` 再 `onError()`（`:480-482`），反而修对了。
+
+### 9.2 对照暴露的已知偏差（待修，暂存）
+
+按你的计划：**先全量跑通，再一次性改**。此处仅记录，不在未验证基线上叠改动。
+
+- **偏差 H1（高）— `mapArg` bytes 写路径没跟着读路径对齐**
+  官方 bytes 分支返回 `Buffer.from(arg,'base64')`（`nodeSqliteAdapter.js:210-212` 原样照搬）。
+  但 node:sqlite 的 `DatabaseSync` 绑定 BLOB 参数期望 `Uint8Array`/`ArrayBuffer`，对纯 `Buffer`
+  的接受度跨 Node 版本不一致。**读路径已处理 `Uint8Array`，写路径没改**——读改了、写没改的不对称。
+  仅当 schema 有 `Bytes` 字段才触发，故打包验证未暴露。修法：bytes 分支返回 `Uint8Array`。
+  验证：加 BLOB round-trip 测试。
+
+- **偏差 M2（中）— checksum 算了不校验（drift 静默）**
+  `runPrismaCommand.js` 写入 `_prisma_migrations.checksum`，但读取时只 `SELECT migration_name`
+  （`:88-91`），从不比对。migration.sql 内容被改后因目录名已在 applied 集合里直接跳过，DB 与
+  schema 悄悄不一致且无告警。修法：读取时比对 checksum，不符则报错中止。
+
+- **偏差 M3（中）— 迁移器 `PRAGMA foreign_keys=ON` 死代码**
+  FK pragma 是每连接的；`runPrismaCommand.js:118` 在专用连接上 ON 后 `finally` 立刻 close，
+  无意义（运行时 adapter 另开连接自己设 ON）。无害，但说明该分支未被仔细验证。
+
+### 9.3 并发 / 时序隐患（待修，暂存）
+
+- **C1（高）— 启动期迁移 vs IPC 查询的双连接 race**
+  `apps/desktop/src/main/index.ts` 在同一同步 tick 内：`initDB()`（fire-and-forget 未 await）、
+  `ipcMain.handle(...)`（IPC 立即就绪）、`createMainWindow()`（渲染进程立即启动）。
+  `initDB` 需迁移时会 `$disconnect()`（`db.ts:72`）→ 迁移器开第二个 `DatabaseSync` 跑
+  `BEGIN…CREATE TABLE…COMMIT` → `$connect()`（`db.ts:82`）。而 `App.vue` 窗口起来 1s 后即发查询，
+  `handlePersistenceAction`（`db.ts:29-45`）**不检查 `global.isDBReady`**。若查询落进
+  disconnect→connect 窗口，Prisma 会 lazily 重开 adapter 连接，与迁移器连接构成真实双连接 + 写冲突。
+  修法：`initDB()` 改 await；DB ready 前 IPC handler 排队或拒绝。
+
+- **C2（高）— 无 `busy_timeout`、无 WAL**
+  全仓库 PRAGMA 只有 3 处 `foreign_keys`。默认 rollback-journal + 零 busy timeout，
+  意味着 C1 的冲突立刻 `SQLITE_BUSY` 失败（映射成 `SocketTimeout`）而非等锁重试。
+  修法：adapter（`nodeSqliteAdapter.js:501` 附近）和迁移器（`runPrismaCommand.js:85` 附近）两处连接
+  都加 `PRAGMA busy_timeout=5000` + `PRAGMA journal_mode=WAL`。
+
+- **C3（中）— `AccountModel.updateArrayProp` 非事务 read-modify-write**
+  `AccountModel.js:38-50` 是 `await get()` 后 `await update()` 两个独立 await，未包事务；
+  `createNewThread` / `saveThreadMessage` 都调它。两个并发 IPC 打同一 account 会丢更新。
+  adapter 的 `Mutex` 只在 `startTransaction`（`:476`）加锁，裸 `queryRaw`/`executeRaw` 不加锁。
+  修法：用 `prisma.$transaction` 包 read-modify-write。
+
+### 9.4 测试缺口与重建计划
+
+现状：**零测试框架**（root `package.json` 是占位 echo；无 vitest/jest/node:test；
+`apps/desktop` 已装 `fast-check@^4.5.3` + `pure-rand` 但未接线）。官方 adapter 测试跑在 Prisma
+仓库级共享 functional-test 套件里，不随包分发、无法脱离其 harness 独立跑，故不能直接复用。
+
+重建计划（照 `docs/prisma7-adapter-ref/conversion.ts` 各分支）：
+- `mapArg`：int/float/decimal/bigint/boolean/datetime（两种 timestampFormat）/bytes 每分支
+- `mapRow`：整数截断、DateTime 数字→ISO、bigint 安全范围边界、BLOB 透传
+- `mapDriverError`：UNIQUE/PRIMARYKEY/NOTNULL/FK/BUSY 的 errcode→kind 映射（与官方差异最大，最该测）
+- 迁移器：建库→CRUD→唯一约束→迁移幂等→（修 M2 后）checksum drift 检测
+- 并发：用 `fast-check` 对「多并发 IPC → updateArrayProp」做属性测试，复现 C3 丢更新
+
+### 9.5 待办处理结果（2026-07-16，全量跑通后一次性处理，已完成）
+
+| 项 | 结论 | 位置 |
+|---|---|---|
+| H1 bytes 写路径改 `Uint8Array` | **撤销——非 bug**。实测 `Buffer.from(base64)` 是 `Uint8Array` 子类，node:sqlite 直接接受，round-trip 一致；改 `ArrayBuffer` 反而抛错。当前代码保持不变。 | `nodeSqliteAdapter.js` mapArg |
+| C1 `initDB` await + IPC ready 门禁 | ✅ 已修：`db.ts` 加 `dbReady` promise，`handlePersistenceAction` 派发前 `await dbReady`；在 `initDB` 的 `finally` resolve（迁移失败也开闸，错误以正常查询错误冒泡而非 hang）。窗口仍立即创建，早期查询排队。 | `db.ts` |
+| C2 busy_timeout + WAL（两处连接） | ✅ 已修：adapter `createDatabase` 与迁移器连接均加 `PRAGMA busy_timeout=5000` + `journal_mode=WAL`。 | `nodeSqliteAdapter.js` / `runPrismaCommand.js` |
+| C3 `updateArrayProp` 包事务 | ✅ 已修：read-modify-write 改用 `prisma.$transaction` 交互式回调，读写都对 `tx` 发；返回形状统一为 `{account, error}`。 | `AccountModel.js` |
+| M2 迁移器校验 checksum | ✅ 已修：已应用迁移的 `migration.sql` 被改动时 checksum 不符即抛错中止（drift guard），不再静默跳过。 | `runPrismaCommand.js` |
+| M3 删迁移器死代码 `foreign_keys=ON` | ✅ 已修：删除迁移末尾无意义的 `PRAGMA foreign_keys=ON`（连接随即关闭）。 | `runPrismaCommand.js` |
+| 建最小测试套件（node:test + fast-check） | ✅ 已建：`packages/common/test/` 四个文件（conversion / errorMapping / migrationRunner / concurrency），`pnpm --filter @app/common test`，33/33 通过。`fast-check` 提为 common 显式 devDependency。 | `packages/common/test/` |
+
+**验证**：`pnpm --filter @app/common test` 33/33 通过；`pnpm build:pkgs` + desktop typecheck 均通过。

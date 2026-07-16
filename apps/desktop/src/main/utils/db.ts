@@ -25,6 +25,17 @@ const modelsFactory = {
 // runPrismaCommand), not by forking the Prisma CLI.
 const runPrisma = () => runPrismaCommand({ ctx: dbContext })
 
+// initDB runs unawaited at startup (see main/index.ts) while the IPC handler and
+// renderer go live immediately. On a needs-migration launch there is a window
+// where initDB has called prisma.$disconnect() and the migration runner holds
+// the SQLite file — a query arriving in that window would race the migration.
+// This promise gates every IPC query until initDB settles, so early renderer
+// calls queue instead of racing. Resolved in initDB's finally (even on failure)
+// so a migration error surfaces as a normal query error rather than a hang.
+let resolveDBReady: () => void
+const dbReady = new Promise<void>((resolve) => {
+  resolveDBReady = resolve
+})
 
 export async function handlePersistenceAction(
   _,
@@ -33,6 +44,7 @@ export async function handlePersistenceAction(
   ...args: unknown[]
 ) {
   try {
+    await dbReady
     const modelInstanceGetter = modelsFactory[model]
     if (!modelInstanceGetter) throw new Error(`factory function for ${model} not found`)
     const m = modelInstanceGetter(prisma)
@@ -65,6 +77,7 @@ export async function initDB() {
   }
   if (!needsMigration) {
     console.log('%c Does not need migration', 'color: green')
+    resolveDBReady()
     return
   }
 
@@ -80,5 +93,8 @@ export async function initDB() {
     throw e
   } finally {
     await prisma.$connect()
+    // Open the gate only after the adapter connection is back — queued IPC
+    // queries now run against a live, migrated DB.
+    resolveDBReady()
   }
 }

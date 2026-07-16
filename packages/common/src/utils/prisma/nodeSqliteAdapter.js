@@ -497,6 +497,15 @@ function createDatabase(input) {
   const { url } = input
   const dbPath = url.replace(/^file:/, '')
   const db = new DatabaseSync(dbPath)
+  // WAL lets readers and a writer coexist without blocking each other, and
+  // busy_timeout makes a contended lock wait-and-retry instead of failing fast
+  // with SQLITE_BUSY. Both matter because the migration runner briefly opens a
+  // second connection to the same file during startup (see runPrismaCommand.js).
+  // :memory: databases don't support WAL, so guard on that.
+  if (dbPath !== ':memory:') {
+    db.exec('PRAGMA journal_mode = WAL')
+  }
+  db.exec('PRAGMA busy_timeout = 5000')
   // Match Prisma's expectations: enforce foreign keys like the Rust engine did.
   db.exec('PRAGMA foreign_keys = ON')
   return db
@@ -524,3 +533,17 @@ class PrismaNodeSqlite {
 }
 
 module.exports = { PrismaNodeSqlite }
+
+// Internal conversion/error helpers exposed for unit tests only. Not part of the
+// public adapter surface — consumers should use PrismaNodeSqlite via getPrisma.
+// Re-exported from @prisma/driver-adapter-utils so tests can assert on the same
+// enum the adapter maps to.
+module.exports.ColumnTypeEnum = ColumnTypeEnum
+module.exports.mapArg = mapArg
+module.exports.mapRow = mapRow
+module.exports.mapDeclType = mapDeclType
+module.exports.getColumnTypes = getColumnTypes
+module.exports.inferColumnType = inferColumnType
+module.exports.convertDriverError = convertDriverError
+module.exports.mapDriverError = mapDriverError
+module.exports.parseConstraintFields = parseConstraintFields

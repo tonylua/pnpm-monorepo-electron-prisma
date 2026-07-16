@@ -36,17 +36,41 @@ const getAccountModel = prisma => ({
   },
 
   updateArrayProp: async function (id, propName, arr) {
-    const existArr = (await this.get({ id }))[propName] || [];
-    const uniqueArrById = [...new Map([...existArr, ...arr].map((item) => [item.id, item])).values()];
-    return this.update(id, {
-      [propName]: {
-        updateMany: uniqueArrById.reduce((acc, item) => {
-          acc.where = {id: item.id};
-          acc.data = item;
-          return acc;
-        }, {where: {}, data: {}})
-      },
-    });
+    // Read-modify-write must be atomic: two concurrent IPC calls updating the
+    // same account would otherwise interleave (both read the old array, both
+    // write, one overwrites the other = lost update). Wrap the get + update in
+    // a single interactive transaction so the read and write see a consistent
+    // snapshot and serialize against each other. All queries here hit `tx`, the
+    // transaction client — using the outer `prisma` would escape the tx.
+    try {
+      const account = await prisma.$transaction(async (tx) => {
+        const current = await tx.Account.findFirst({ where: { id } });
+        if (!current) throw new Error(`account ${id} not found`);
+        const existArr = current[propName] || [];
+        const uniqueArrById = [
+          ...new Map([...existArr, ...arr].map((item) => [item.id, item])).values(),
+        ];
+        return tx.Account.update({
+          where: { id },
+          data: {
+            [propName]: {
+              updateMany: uniqueArrById.reduce(
+                (acc, item) => {
+                  acc.where = { id: item.id };
+                  acc.data = item;
+                  return acc;
+                },
+                { where: {}, data: {} }
+              ),
+            },
+          },
+        });
+      });
+      return { account, error: null };
+    } catch (error) {
+      console.error(error.message);
+      return { account: null, error: error.message };
+    }
   },
 
   get: async function (clause = {}) {
