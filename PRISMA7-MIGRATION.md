@@ -287,3 +287,19 @@ adapter 上层代码几乎不变（只换 factory + 加原生 rebuild/asarUnpack
 | 建最小测试套件（node:test + fast-check） | ✅ 已建：`packages/common/test/` 四个文件（conversion / errorMapping / migrationRunner / concurrency），`pnpm --filter @app/common test`，33/33 通过。`fast-check` 提为 common 显式 devDependency。 | `packages/common/test/` |
 
 **验证**：`pnpm --filter @app/common test` 33/33 通过；`pnpm build:pkgs` + desktop typecheck 均通过。
+
+---
+
+## 10. 这是不是"新版 Electron + Prisma"的隐藏红利
+
+算是，但要说清红利的来源：**它不是 Prisma 给的，是新版 Electron/Node 给的，Prisma 7 只是恰好"让开了路"。**
+
+拆成两半看：
+
+- **Prisma 7 的贡献是"减法"**：删掉 Rust query engine、强制走 driver adapter，等于把原来那个必须随包分发、必须在 asar 外定位的引擎二进制（`.dll.node`/`schema-engine.exe`）这个包袱卸了。这不是它送红利，是它**不再挡路**。
+- **真正的红利来自 Electron 内置的 `node:sqlite`**：有了一个零编译、零 ABI、随运行时自带的 SQLite，才能填上 Prisma 7 让出的那个 adapter 空位，而不必引入 better-sqlite3 这类原生模块。
+  门槛不是某个特定 Electron 大版本，而是**打包所用 Electron 内置的 Node ≥ 22.5**（`node:sqlite` 首次可用的版本）。凡满足此条件的 Electron 都行——实测 Electron 37.10.3（Node 22）即可，本仓库用的 43 也可；37.10.3 不一定是最早能用的版本，具体下限取决于各 Electron 版本捆绑的 Node。
+
+所以准确说法是：**"Prisma 卸掉原生引擎"和"Electron 捆绑的 Node 内置了原生 SQLite"这两个独立趋势在同一时间窗口交汇，催生的一个组合红利**——任何一边早一点都吃不到（Prisma 6 还绑着引擎，Node 22.5 之前也没有 `node:sqlite`）。
+
+**代价（诚实标注，避免误读为白捡）**：官方推荐路径仍是 `@prisma/adapter-better-sqlite3`；本方案走的 `node:sqlite` 仍是 experimental，且 adapter + 迁移器都需自行维护（这正是第 9 节补对照、第 9.3/9.4 修并发与建测试的原因）。本质是**"愿意自扛一点集成责任，换取打包侧的巨大简化"**——红利真实，但非白得。
