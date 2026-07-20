@@ -497,13 +497,13 @@ function createDatabase(input) {
   const { url } = input
   const dbPath = url.replace(/^file:/, '')
   const db = new DatabaseSync(dbPath)
-  // WAL lets readers and a writer coexist without blocking each other, and
+  // DELETE mode uses rollback journal for transactions (original SQLite default).
   // busy_timeout makes a contended lock wait-and-retry instead of failing fast
   // with SQLITE_BUSY. Both matter because the migration runner briefly opens a
   // second connection to the same file during startup (see runPrismaCommand.js).
-  // :memory: databases don't support WAL, so guard on that.
+  // :memory: databases don't support journal mode changes, so guard on that.
   if (dbPath !== ':memory:') {
-    db.exec('PRAGMA journal_mode = WAL')
+    db.exec('PRAGMA journal_mode = DELETE')
   }
   db.exec('PRAGMA busy_timeout = 5000')
   // Match Prisma's expectations: enforce foreign keys like the Rust engine did.

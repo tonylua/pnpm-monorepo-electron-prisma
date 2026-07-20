@@ -85,10 +85,9 @@ async function runPrismaCommand(param) {
     // Wait-and-retry on lock contention instead of failing fast: the runtime
     // adapter connection may still be closing when we open this one at startup.
     db.exec('PRAGMA busy_timeout = 5000')
-    // WAL persists in the DB file header, so setting it once (here, often the
-    // first connection to a fresh DB) applies to every later connection too.
-    // It lets readers and a writer coexist instead of blocking each other.
-    db.exec('PRAGMA journal_mode = WAL')
+    // DELETE mode uses rollback journal for transactions (original SQLite default).
+    // This keeps a single database file instead of the -wal/-shm sidecar files WAL creates.
+    db.exec('PRAGMA journal_mode = DELETE')
     // FKs are enforced per-connection; disabling here lets migration DDL create
     // tables in any order without tripping FK checks. This connection is closed
     // right after, so we don't re-enable it (the runtime adapter sets its own).
