@@ -422,25 +422,28 @@ class NodeSqliteTransaction extends NodeSqliteQueryable {
   }
 
   #unlock
+  #isFinished = false
 
+  // usePhantomQuery=false 时，Prisma 会先通过 executeRaw 执行 COMMIT/ROLLBACK，
+  // 然后再调用这里的事务生命周期方法。如果此处再次执行事务 SQL，会造成重复提交，
+  // 导致 updateMany 虽然已经写入数据库，但最终仍以事务已关闭异常结束。
+  // 因此这里仅负责释放事务互斥锁，并通过 #isFinished 保证只释放一次。
   commit() {
     debug('commit')
-    try {
-      this.db.prepare('COMMIT').run()
-    } finally {
-      this.#unlock()
-    }
+    this.#finish()
     return Promise.resolve()
   }
 
   rollback() {
     debug('rollback')
-    try {
-      this.db.prepare('ROLLBACK').run()
-    } finally {
-      this.#unlock()
-    }
+    this.#finish()
     return Promise.resolve()
+  }
+
+  #finish() {
+    if (this.#isFinished) return
+    this.#isFinished = true
+    this.#unlock()
   }
 
   async createSavepoint(name) {
