@@ -1,9 +1,9 @@
-import { PrismaClient, Prisma } from './generated/db_client/client'
+import { PrismaClient, Prisma, Account, Thread, ThreadMessage } from './generated/db_client/client'
 import { DBModelsGetterMap } from './models'
 
 // Re-export the generated client type so consumers import it from '@app/common'
 // instead of reaching into the generated output directory.
-export type { PrismaClient, Prisma }
+export type { PrismaClient, Prisma, Account, Thread, ThreadMessage }
 
 export interface IContextDB {
   getDBPath(): string
@@ -30,7 +30,6 @@ export type TypeDBConstants = {
   isDev: boolean
   dbPath: string
   dbUrl: string
-  latestMigration: string
 }
 
 export type TypeGetPrisma = (ctx: IContextDB) => PrismaClient

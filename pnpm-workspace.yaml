@@ -1,6 +1,18 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+# pnpm 11 blocks git-resolved subdeps by default; electron-builder@26 pulls in
+# @electron/rebuild -> @electron/node-gyp (a git repo), so allow it here.
+blockExoticSubdeps: false
+# pnpm 11 requires explicit approval for postinstall build scripts (replaces the
+# old onlyBuiltDependencies). Without this the deps-status check that runs before
+# every `pnpm <script>` exits non-zero on the "Ignored build scripts" warning.
+allowBuilds:
+  '@prisma/engines': true
+  electron-winstaller: true
+  esbuild: true
+  prisma: true
+  vue-demi: true
 catalogs:
   electron:
     electron: 43.0.0-beta.3

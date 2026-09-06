@@ -1,0 +1,2 @@
+pnpm desktop typecheck
+npx lint-staged

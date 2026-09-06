@@ -13,13 +13,22 @@
     "build:pkgs": "pnpm common build",
     "build:win": "pnpm build:pkgs && pnpm desktop build:win",
     "init:db": "pnpm common db:migrate && pnpm common db:generate",
+    "prepare": "husky",
+    "commitlint": "commitlint --config commitlint.config.js",
     "postinstall": "node ./scripts/install.js && pnpm init:db"
+  },
+  "lint-staged": {
+    "apps/desktop/**/*.{js,jsx,cjs,mjs,ts,tsx,cts,mts,vue}": "pnpm --filter @app/desktop exec eslint --fix"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@commitlint/cli": "^21.2.2",
+    "@commitlint/config-conventional": "^21.2.2",
     "@types/node": "^20.17.17",
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.5.0"
   }
 }

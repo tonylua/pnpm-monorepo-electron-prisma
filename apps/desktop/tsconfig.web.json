@@ -11,6 +11,7 @@
   "compilerOptions": {
     "composite": true,
     "noUnusedLocals": false,
+    "skipLibCheck": true,
     "types": [],
     "baseUrl": ".",
     "paths": {

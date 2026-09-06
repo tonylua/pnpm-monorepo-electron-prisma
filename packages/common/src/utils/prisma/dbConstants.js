@@ -1,6 +1,11 @@
 const path = require('path')
 
 /**
+ * Prisma 7 is Rust-free: there is no query-engine .dll.node and no schema-engine
+ * .exe to locate, so this only resolves the sqlite file path and its file: URL.
+ * The runtime connects through the node:sqlite driver adapter (see index.js);
+ * migrations are applied by executing migration.sql directly (runPrismaCommand.js).
+ *
  * @type {import('../../types').TypeGetDBConstants}
  */
 function getDBConstants(ctx) {
@@ -10,19 +15,10 @@ function getDBConstants(ctx) {
   const dbUrl = process.env.DATABASE_URL || 'file:' + dbPath
   process.env.DATABASE_URL = dbUrl
 
-  if (!global.hasLastMigWarned) {
-    console.log('%c ⚠!!! 每次创建 migration 后更新 latestMigration 常量 !!!⚠', 'color: yellow')
-    global.hasLastMigWarned = true
-  }
-
   return {
     isDev,
     dbPath,
-    dbUrl,
-    // Bump this after every `prisma migrate dev` so initDB knows a newer
-    // migration needs applying. Must match the newest folder in
-    // src/prisma/migrations (suffix compared in db.ts initDB).
-    latestMigration: '20250330045745_init'
+    dbUrl
   }
 }
 

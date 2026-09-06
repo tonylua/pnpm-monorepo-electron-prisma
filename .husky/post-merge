@@ -1,0 +1,2 @@
+node scripts/check-lockfile.js
+node scripts/check-db-migration.js
