@@ -9,6 +9,7 @@ blockExoticSubdeps: false
 # every `pnpm <script>` exits non-zero on the "Ignored build scripts" warning.
 allowBuilds:
   '@prisma/engines': true
+  electron: true
   electron-winstaller: true
   esbuild: true
   prisma: true

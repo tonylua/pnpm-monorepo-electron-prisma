@@ -120,10 +120,10 @@ export async function initDB() {
         `db latest migration: ${mname}, required baseline: ${latestMigrationFromDisk}, needsMigration=${needsMigration}`,
       );
     } catch (e) {
-      // @ts-ignore debug
       console.error(
         "[db.ts SELECT *]",
         e,
+        // @ts-expect-error _engine is private API for debug logging
         prisma?._engine?.datasourceOverrides,
       );
       needsMigration = true;
