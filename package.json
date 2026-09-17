@@ -13,9 +13,10 @@
     "build:pkgs": "pnpm common build",
     "build:win": "pnpm build:pkgs && pnpm desktop build:win",
     "init:db": "pnpm common db:migrate && pnpm common db:generate",
+    "init:db:ci": "pnpm common db:migrate:deploy && pnpm common db:generate",
     "prepare": "husky",
     "commitlint": "commitlint --config commitlint.config.js",
-    "postinstall": "node ./scripts/install.js && pnpm init:db"
+    "postinstall": "node ./scripts/install.js && node ./scripts/lifecycle/init-db.js"
   },
   "lint-staged": {
     "apps/desktop/**/*.{js,jsx,cjs,mjs,ts,tsx,cts,mts,vue}": "pnpm --filter @app/desktop exec eslint --fix"

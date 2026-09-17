@@ -8,6 +8,7 @@
     "build": "pnpm clean && pnpm db:generate && node build.mjs",
     "clean": "rimraf dist",
     "db:migrate": "prisma migrate dev --name init",
+    "db:migrate:deploy": "prisma migrate deploy --config ./prisma.config.ts",
     "db:generate": "prisma generate",
     "test": "node --test"
   },
