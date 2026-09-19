@@ -8,6 +8,11 @@ export type Account = Models.Account
 export type Thread = Models.Thread
 export type ThreadMessage = Models.ThreadMessage
 
+// v8 doesn't have Prisma.ModelName; create a compatible namespace for existing code
+export namespace Prisma {
+  export type ModelName = 'Account' | 'Thread' | 'ThreadMessage'
+}
+
 export interface IContextDB {
   getDBPath(): string
   // Directory containing the Prisma migration folders.
