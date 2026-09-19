@@ -1,10 +1,83 @@
 # Prisma 8 (RC) 调研与升级尝试 — 记录与结论
 
-**状态：调研完成，升级未合并。**
+**状态：调研完成，升级未合并。第 0 节（2026-09-19 更新）修正了下方旧结论的核心误判。**
 
-本会话尝试将本仓库从 Prisma 7.8.0 升级到 Prisma 8（RC）。
-调研结论：**当前 v8 公开的 RC 包不是 Prisma 7 的兼容升级，而是 Prisma Composer CLI（统一平台 CLI）的预发布。** 因此升级工作暂停。
-本文记录：调研步骤、已尝试的改动、遇到的具体错误、判断依据、以及后续何时/如何重试。
+---
+
+## 0. 重大更新（2026-09-19，基于对 Prisma 8 官方源码的直接阅读）
+
+拿到 Prisma 8 官方源码仓库（`C:/Users/TB/my_git/prisma8`，即 `github.com/prisma/orm`，Apache-2.0）后，
+下方第 1–8 节（2026-07 首轮调研）的**核心结论被推翻**。这里先给出修正，旧记录原样保留作历史存档。
+
+### 0.1 旧结论错在哪
+
+旧调研的一句话总结说："v8 RC 公开的 `prisma` 包是 **Prisma Composer CLI**，不是 Prisma 7.x CLI 的兼容升级"。
+**这个判断是错的。** 当时无法访问官方文档，只能从 `prisma --help` 反推，把"CLI 命令重组 + config 结构变化"
+误读成了"平台产品取代 ORM"。
+
+源码证明：**Prisma 8 是整个 ORM 的 TypeScript 重写**，不是产品替换。
+- `@prisma/orm-toolchain` 的包描述原文：`the ORM command family for the prisma CLI`。
+- config 的 `{composer, orm, skills}` 三个 section 里，**`orm` section 就是 ORM 配置的家**——旧调研把
+  "schema/datasource 不在顶层"误当成"ORM 没了"，其实只是挪进了 `orm` section。
+- 官方有 `docs/orm/coming-from-prisma-orm-7` 迁移指南；ORM 命令只是改了名（见旧文第 3 节的映射表，那张表本身是对的）。
+
+### 0.2 对本仓库最关键的发现：v8 官方 SQLite 驱动 = node:sqlite
+
+本仓库在 Prisma 7 时代**被迫手写**的 `node:sqlite` 方案（`nodeSqliteAdapter.js` + `runPrismaCommand.js`），
+**Prisma 8 官方直接收编成了标配**。证据（`prisma8/packages/3-targets/7-drivers/sqlite/src/sqlite-driver.ts`）：
+
+```ts
+import { DatabaseSync } from 'node:sqlite';
+function openConnection(path: string): DatabaseSync {
+  const db = new DatabaseSync(path);
+  db.exec('PRAGMA foreign_keys = ON');
+  db.exec('PRAGMA busy_timeout = 5000');   // ← 与本仓库 runPrismaCommand.js 的做法一致
+  return db;
+}
+```
+
+`@prisma/orm-sqlite` 的 README 原文：`The driver is Node's built-in node:sqlite, so there is no native module to compile.`
+→ 本仓库赌对了方向（node:sqlite 零原生依赖），只是早了一个大版本。升级到 v8 后，**自维护的 adapter 与迁移 runner 可以整个删掉**，交还给官方。
+
+### 0.3 npm 包状态（2026-09-19 实测，与旧文第 2 节已不同）
+
+| 包 | 旧文记录（2026-07） | 现在 `latest` | 现在 `dev` |
+|---|---|---|---|
+| `prisma` (CLI) | rc.12 | **8.0.0-rc.15** | 8.0.0-rc.15-dev.109 |
+| `@prisma/client` | 7.10.0 | 7.10.0（仍是 v7） | 8.1.0-dev.6 |
+| `@prisma/orm-toolchain` | 未记录 | **8.0.0-rc.11** | 8.0.0-rc.11-dev.35 |
+| `@prisma/orm-framework` | 未记录 | **8.0.0-rc.11** | 8.0.0-rc.11-dev.35 |
+
+关键变化：v8 运行时**不再叫 `@prisma/client`**，而是 `@prisma/orm-sqlite`（一站式包，内含 framework + family-sql + target-sqlite + toolchain）。
+旧文纠结的"`@prisma/client@8.0.0-rc.x` 404"是真的，但那是找错了包——v8 的运行时入口换了名字。
+
+### 0.4 现在能不能升级 v8
+
+**技术上可行，但这是一次比 6→7 更彻底的重写，且时机仍不成熟。**
+
+拦路石：
+1. **SQLite 在 v8 仍是 "proof of concept"**（README 原文）。`scorecard.md` 数据：SQLite 只有 85 个 ✅、235 个
+   🟡（untested）；迁移工作流（`db init`/`db update`/幂等/drift/ledger）对 SQLite **几乎全是 🟡，无集成测试背书**。
+2. **是重写不是升级**：`schema.prisma`→contract、`PrismaClient`→`sqlite({contract,path})`、查询语法全变
+   （`db.orm.User.where({id:1}).all()`）、所有 model 层代码要改。
+3. **仍是 RC**，final 预计还有 4–8 周，API 可能继续 break。
+
+正确的升级触发信号（取代旧文第 7 节）：
+- SQLite 从 proof-of-concept 转正（scorecard 里 SQLite 迁移那批 🟡 变 ✅）
+- `@prisma/orm-sqlite` 进入 npm `latest`（现在仅 workspace RC）
+- v8 final + 至少一个 patch
+
+好消息：升级的痛点与 6→7 相反。**打包/原生依赖/引擎定位这些 6→7 最痛的事，v8 直接消掉了**
+（官方就用 node:sqlite）；真正的工作量集中在**运行时查询 API 重写**。
+
+### 0.5 本次会话（2026-09-19）后续动作
+
+按用户要求，先提交本次文档修正，随后**动手尝试**迁移到最新 v8（RC）做可行性验证。
+尝试过程与结果见文末「第 9 节」（如已追加）。
+
+---
+
+## （以下为 2026-07 首轮调研原始记录，核心结论已被上方第 0 节修正，保留作历史）
 
 ---
 
