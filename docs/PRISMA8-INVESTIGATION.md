@@ -62,6 +62,9 @@ function openConnection(path: string): DatabaseSync {
    （`db.orm.User.where({id:1}).all()`）、所有 model 层代码要改。
 3. **仍是 RC**，final 预计还有 4–8 周，API 可能继续 break。
 
+**运行时迁移方案确认**：v8 提供编程式迁移 API（`@prisma/orm-sqlite/control` 的 `createSqliteControlClient`），
+打包后 Electron 可运行时调 `dbUpdate`/`migrate` 无需 fork CLI，是 v7 `runPrismaCommand.js` 的正式替代品。
+
 正确的升级触发信号（取代旧文第 7 节）：
 - SQLite 从 proof-of-concept 转正（scorecard 里 SQLite 迁移那批 🟡 变 ✅）
 - `@prisma/orm-sqlite` 进入 npm `latest`（现在仅 workspace RC）
