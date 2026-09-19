@@ -24,9 +24,9 @@ await build({
   format: 'cjs',
   target: 'node22',
   outfile: path.join(dist, 'index.js'),
-  // Keep the Prisma runtime and node builtins external; everything else
-  // (generated client TS, adapter, models) is inlined.
-  external: ['@prisma/client', '@prisma/client/*', '@prisma/driver-adapter-utils'],
+  // Keep the Prisma v8 runtime external; everything else
+  // (generated contract, models) is inlined.
+  external: ['@prisma/orm-sqlite', '@prisma/orm-sqlite/*'],
   logLevel: 'info'
 })
 

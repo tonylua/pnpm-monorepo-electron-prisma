@@ -1,7 +1,12 @@
-import { Account, PrismaClient, Thread } from 'db_client'
+import { Models } from '../generated/db_client/contract'
 
-export type GetThreadModel = <T = unknown>(
-  prisma: PrismaClient
+type Account = Models.Account
+type Thread = Models.Thread
+
+// v8: model factories take (client, db) instead of (prisma)
+export type GetThreadModel = (
+  client: any,
+  db: any
 ) => {
   modelName: string
   defaultName?: string

@@ -1,29 +1,21 @@
-import { PrismaClient, Prisma, Account, Thread, ThreadMessage } from './generated/db_client/client'
+import type { Models, Contract } from './generated/db_client/contract'
 import { DBModelsGetterMap } from './models'
 
-// Re-export the generated client type so consumers import it from '@app/common'
+// Re-export the v8 generated contract types so consumers import from '@app/common'
 // instead of reaching into the generated output directory.
-export type { PrismaClient, Prisma, Account, Thread, ThreadMessage }
+export type { Models, Contract }
+export type Account = Models.Account
+export type Thread = Models.Thread
+export type ThreadMessage = Models.ThreadMessage
 
 export interface IContextDB {
   getDBPath(): string
-  // Directory containing the Prisma migration folders (each with a migration.sql).
-  // In dev this is the schema sibling; in a packaged app it is shipped via
+  // Directory containing the Prisma migration folders.
+  // In dev this is the contract sibling; in a packaged app it is shipped via
   // electron-builder extraResources to resources/prisma/migrations.
   getMigrationsDir?: () => string
   getSchemaPrismaPath?: () => string
   getEnvPath?: () => string
-}
-
-export interface PrismaMigration {
-  id: string
-  checksum: string
-  finished_at: string
-  migration_name: string
-  logs: string
-  rolled_back_at: string
-  started_at: string
-  applied_steps_count: string
 }
 
 export type TypeDBConstants = {
@@ -32,12 +24,23 @@ export type TypeDBConstants = {
   dbUrl: string
 }
 
-export type TypeGetPrisma = (ctx: IContextDB) => PrismaClient
+// v8: getPrisma is async and returns { Account, Thread, ThreadMessage, client, runtime, db }
+export type TypeGetPrisma = (ctx: IContextDB) => Promise<{
+  Account: any
+  Thread: any
+  ThreadMessage: any
+  client: any
+  runtime: any
+  db: any
+}>
 
 export type TypeGetDBConstants = (ctx: IContextDB) => TypeDBConstants
 
+// v8: model names are literal union, not Prisma.ModelName
 export type TypeDBModels = {
-  [K in Prisma.ModelName as `get${K}Model`]: DBModelsGetterMap[K]
+  getAccountModel: DBModelsGetterMap['Account']
+  getThreadModel: DBModelsGetterMap['Thread']
+  getThreadMessageModel: DBModelsGetterMap['ThreadMessage']
 }
 
 export type RunPrismaCmdParam = {

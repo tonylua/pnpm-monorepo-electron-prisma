@@ -1,6 +1,10 @@
 node_modules
 *.db
 *.db-journal
+*.sqlite
+*.sqlite-journal
+*.sqlite-shm
+*.sqlite-wal
 dist
 apps/desktop/out/
 packages/common/src/generated/

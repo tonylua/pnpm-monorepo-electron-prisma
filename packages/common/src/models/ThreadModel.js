@@ -1,18 +1,35 @@
+import { randomUUID } from 'node:crypto';
+
+/**
+ * Convert v7-style orderBy to v8 callback form
+ * @param {object|null} orderBy - v7 format like { createTime: 'desc' }
+ * @returns {Function[]} v8 format like [(t) => t.createTime.desc()]
+ */
+function convertOrderBy(orderBy) {
+  if (!orderBy) return [];
+  return Object.entries(orderBy).map(([field, direction]) => {
+    return (t) => t[field][direction]();
+  });
+}
+
 /**
  * @type {import('./ThreadModel.d.ts').GetThreadModel}
  */
-const getThreadModel = prisma => ({
+const getThreadModel = (client, db) => ({
   modelName: "Thread",
 
   defaultName: "Thread",
 
   create: async function (account, data = {}) {
     try {
-      const thread = await prisma.Thread.create({
-        data: {
-          name: data.name ? String(data.name) : this.defaultName,
-          accountId: account.id,
-        },
+      const now = new Date();
+      const thread = await client.Thread.create({
+        id: randomUUID(),
+        name: data.name ? String(data.name) : this.defaultName,
+        accountId: account.id,
+        vectorSearchMode: 'default',
+        createTime: now,
+        updateTime: now,
       });
 
       return { thread, error: null };
@@ -26,9 +43,9 @@ const getThreadModel = prisma => ({
     if (!prevThread) throw new Error("No thread id provided for update");
 
     try {
-      const thread = await prisma.Thread.update({
-        where: { id: prevThread.id },
-        data,
+      const thread = await client.Thread.where({ id: prevThread.id }).update({
+        ...data,
+        updateTime: new Date(),
       });
       return { thread, error: null };
     } catch (error) {
@@ -39,11 +56,7 @@ const getThreadModel = prisma => ({
 
   get: async function (clause = {}) {
     try {
-      const thread = await prisma.Thread.findFirst({
-        where: {
-          ...clause
-        },
-      });
+      const thread = await client.Thread.where(clause).first();
 
       return thread || null;
     } catch (error) {
@@ -54,9 +67,7 @@ const getThreadModel = prisma => ({
 
   delete: async function (clause = {}) {
     try {
-      await prisma.Thread.deleteMany({
-        where: clause,
-      });
+      await client.Thread.where(clause).deleteAll();
       return true;
     } catch (error) {
       console.error(error.message);
@@ -66,11 +77,20 @@ const getThreadModel = prisma => ({
 
   where: async function (clause = {}, limit = null, orderBy = null) {
     try {
-      const results = await prisma.Thread.findMany({
-        where: clause,
-        ...(limit !== null ? { take: limit } : {}),
-        ...(orderBy !== null ? { orderBy } : {}),
-      });
+      let query = client.Thread.where(clause);
+
+      if (orderBy !== null) {
+        const orderByCallbacks = convertOrderBy(orderBy);
+        if (orderByCallbacks.length > 0) {
+          query = query.orderBy(orderByCallbacks);
+        }
+      }
+
+      if (limit !== null) {
+        query = query.limit(limit);
+      }
+
+      const results = await query.all();
       return results;
     } catch (error) {
       console.error(error.message);
@@ -88,12 +108,14 @@ const getThreadModel = prisma => ({
     if (!account || !thread || !newName) return false;
     if (thread.name !== this.defaultName) return false; // don't rename if already named.
 
-    const { getThreadMessageModel } = require("./ThreadMessageModel");
-    const msgCount = await getThreadMessageModel(prisma).count({
+    const { getThreadMessageModel } = await import("./ThreadMessageModel.js");
+    const msgCount = await getThreadMessageModel(client, db).count({
       accountId: account.id,
       threadId: thread.id,
     });
+
     if (msgCount !== 1) return { renamed: false, thread };
+
     const { thread: updatedThread } = await this.update(thread, {
       name: newName,
     });
@@ -103,4 +125,4 @@ const getThreadModel = prisma => ({
   },
 });
 
-module.exports = { getThreadModel };
+export { getThreadModel };

@@ -1,7 +1,11 @@
-import { Account, PrismaClient, Thread } from 'db_client'
+import { Models } from '../generated/db_client/contract'
 
-export type GetAccountModel = <T = unknown>(
-  prisma: PrismaClient
+type Account = Models.Account
+
+// v8: model factories take (client, db) instead of (prisma)
+export type GetAccountModel = (
+  client: any,
+  db: any
 ) => {
   modelName: string
   defaultName?: string
@@ -13,13 +17,13 @@ export type GetAccountModel = <T = unknown>(
   updateArrayProp(
     id: string,
     propName: string,
-    arr: Partial<Account>[]
+    arr: any[]
   ): Promise<{ account: Account | null; error: string | null }>
   get(clause: Partial<Account>): Promise<Account | null>
   delete(clause: Partial<Account>): Promise<boolean>
   where(
     clause: Partial<Account>,
     limit: number | null,
-    orderBy: Partial<Record<keyof Thread, 'asc' | 'desc'>>[] | null
+    orderBy: Partial<Record<keyof Account, 'asc' | 'desc'>>[] | null
   ): Promise<Account[]>
 }

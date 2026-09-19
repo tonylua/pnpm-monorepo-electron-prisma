@@ -1,74 +1,44 @@
-const fs = require('node:fs')
 const path = require('node:path')
-const crypto = require('node:crypto')
-const { DatabaseSync } = require('node:sqlite')
+const { createSqliteControlClient } = require('@prisma/orm-sqlite/control')
 const getDBConstants = require('./dbConstants')
+const contractJson = require('../../generated/db_client/contract.json')
 
-// Prisma 7 is Rust-free: there is no schema-engine binary and no way to fork the
-// old `prisma migrate deploy` CLI in a packaged app without shipping the engines.
-// Instead we apply the generated migration.sql files directly through node:sqlite,
-// tracking applied migrations in the standard `_prisma_migrations` table so that
-// db.ts's `select * from _prisma_migrations` check keeps working unchanged.
-
-const MIGRATIONS_TABLE_DDL = `
-CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
-  "id"                    TEXT PRIMARY KEY NOT NULL,
-  "checksum"              TEXT NOT NULL,
-  "finished_at"           DATETIME,
-  "migration_name"        TEXT NOT NULL,
-  "logs"                  TEXT,
-  "rolled_back_at"        DATETIME,
-  "started_at"            DATETIME NOT NULL DEFAULT current_timestamp,
-  "applied_steps_count"   INTEGER UNSIGNED NOT NULL DEFAULT 0
-)`
+// Prisma 8 ships createSqliteControlClient: a first-class programmatic migration
+// API (no CLI fork needed, no reading migration.sql files). The ControlClient
+// auto-detects schema diffs and applies them idempotently via dbUpdate.
+//
+// This replaces the v7 approach of reading migration.sql files and executing them
+// via node:sqlite's DatabaseSync. See memory/prisma8-programmatic-migration-api.md.
 
 /**
- * Locate the migrations directory. In dev it lives next to the schema; in a
+ * Locate the migrations directory. In dev it lives next to the contract; in a
  * packaged app it is shipped via electron-builder extraResources to
  * resources/prisma/migrations.
  */
 function resolveMigrationsDir(ctx) {
   if (typeof ctx.getMigrationsDir === 'function') {
     const dir = ctx.getMigrationsDir()
-    if (dir && fs.existsSync(dir)) return dir
+    if (dir) return dir
   }
-  // dev fallback: schema sibling
+  // dev fallback: contract sibling
   if (typeof ctx.getSchemaPrismaPath === 'function') {
     const schemaPath = ctx.getSchemaPrismaPath()
     if (schemaPath) {
       const dir = path.join(path.dirname(schemaPath), 'migrations')
-      if (fs.existsSync(dir)) return dir
+      return dir
     }
   }
   // packaged fallback
   if (process.resourcesPath) {
     const dir = path.join(process.resourcesPath, 'prisma', 'migrations')
-    if (fs.existsSync(dir)) return dir
+    return dir
   }
   throw new Error('runPrismaCommand: could not locate migrations directory')
 }
 
-/** Read migration folders in lexicographic (== chronological) order. */
-function listMigrations(migrationsDir) {
-  return fs
-    .readdirSync(migrationsDir)
-    .filter((name) => {
-      const full = path.join(migrationsDir, name)
-      return (
-        fs.statSync(full).isDirectory() &&
-        fs.existsSync(path.join(full, 'migration.sql'))
-      )
-    })
-    .sort()
-}
-
-function checksum(sql) {
-  return crypto.createHash('sha256').update(sql, 'utf8').digest('hex')
-}
-
 /**
- * Apply all pending migrations directly against the SQLite database.
- * Idempotent: migrations already recorded in `_prisma_migrations` are skipped.
+ * Apply Prisma v8 migrations programmatically using ControlClient.
+ * Idempotent: dbUpdate detects diffs and applies only what's needed.
  *
  * @type {import('../../types').TypeRunPrismaCommand}
  */
@@ -78,69 +48,32 @@ async function runPrismaCommand(param) {
 
   const target = dbPath || dbUrl.replace(/^file:/, '')
   const migrationsDir = resolveMigrationsDir(ctx)
-  const migrations = listMigrations(migrationsDir)
 
-  const db = new DatabaseSync(target)
+  // v8 ControlClient: programmatic migration API
+  // connection can be passed to constructor OR to dbUpdate options
+  const controlClient = createSqliteControlClient()
+
   try {
-    // Wait-and-retry on lock contention instead of failing fast: the runtime
-    // adapter connection may still be closing when we open this one at startup.
-    db.exec('PRAGMA busy_timeout = 5000')
-    // WAL persists in the DB file header, so setting it once (here, often the
-    // first connection to a fresh DB) applies to every later connection too.
-    // It lets readers and a writer coexist instead of blocking each other.
-    db.exec('PRAGMA journal_mode = WAL')
-    // FKs are enforced per-connection; disabling here lets migration DDL create
-    // tables in any order without tripping FK checks. This connection is closed
-    // right after, so we don't re-enable it (the runtime adapter sets its own).
-    db.exec('PRAGMA foreign_keys = OFF')
-    db.exec(MIGRATIONS_TABLE_DDL)
+    await controlClient.connect(target)
 
-    const appliedRows = db
-      .prepare('SELECT migration_name, checksum FROM "_prisma_migrations" WHERE rolled_back_at IS NULL')
-      .all()
-    const applied = new Map(appliedRows.map((r) => [r.migration_name, r.checksum]))
+    // dbUpdate is idempotent: auto-detects diffs from the contract and applies only what's needed.
+    // mode: 'apply' executes changes; 'plan' previews without applying.
+    // migrationsDir: where contract snapshots/ledger are stored (migrations/).
+    const result = await controlClient.dbUpdate({
+      contract: contractJson,
+      mode: 'apply',
+      migrationsDir,
+    })
 
-    for (const name of migrations) {
-      const sqlPath = path.join(migrationsDir, name, 'migration.sql')
-      const sql = fs.readFileSync(sqlPath, 'utf8')
-      const sum = checksum(sql)
-
-      if (applied.has(name)) {
-        // Drift guard: an already-applied migration whose file was edited means
-        // the DB and the schema history have diverged. Fail loudly instead of
-        // silently skipping — this is the one consistency check we opt into.
-        const recorded = applied.get(name)
-        if (recorded && recorded !== sum) {
-          throw new Error(
-            `migration ${name} checksum mismatch: recorded ${recorded}, file ${sum}. ` +
-              `The applied migration file was modified after it ran. ` +
-              `Restore the original migration.sql or create a new migration instead of editing this one.`
-          )
-        }
-        console.log(`  ✓ migration already applied: ${name}`)
-        continue
-      }
-      console.log(`  → applying migration: ${name}`)
-
-      const startedAt = new Date().toISOString()
-      db.exec('BEGIN')
-      try {
-        db.exec(sql)
-        db.prepare(
-          `INSERT INTO "_prisma_migrations"
-             (id, checksum, finished_at, migration_name, logs, started_at, applied_steps_count)
-           VALUES (?, ?, ?, ?, NULL, ?, 1)`
-        ).run(crypto.randomUUID(), sum, new Date().toISOString(), name, startedAt)
-        db.exec('COMMIT')
-      } catch (e) {
-        db.exec('ROLLBACK')
-        throw new Error(`migration ${name} failed: ${e.message}`)
-      }
+    if (!result.ok) {
+      const failure = result.failure
+      throw new Error(`Migration failed: ${failure.code} - ${failure.message}`)
     }
 
+    console.log('  ✓ v8 dbUpdate completed successfully')
     return 0
   } finally {
-    db.close()
+    await controlClient.close()
   }
 }
 

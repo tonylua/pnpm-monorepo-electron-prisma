@@ -1,17 +1,50 @@
 /**
+ * Convert v7-style orderBy to v8 callback form
+ * @param {object|Array|null} orderBy - v7 format like { createTime: 'desc' } or [{ name: 'asc' }]
+ * @returns {Function|Function[]} v8 format like (a) => a.createTime.desc() or array of callbacks
+ */
+function convertOrderBy(orderBy) {
+  if (!orderBy) return undefined;
+
+  // Handle array of orderBy objects
+  if (Array.isArray(orderBy)) {
+    return orderBy.map(item => {
+      const [key, direction] = Object.entries(item)[0];
+      return (a) => a[key][direction]();
+    });
+  }
+
+  // Handle single orderBy object
+  const [key, direction] = Object.entries(orderBy)[0];
+  return (a) => a[key][direction]();
+}
+
+/**
+ * Merge arrays by id, keeping the latest version of each item
+ * @param {Array} existing - existing array
+ * @param {Array} incoming - incoming array to merge
+ * @returns {Array} merged array with unique items by id
+ */
+function mergeArraysById(existing, incoming) {
+  return [
+    ...new Map([...existing, ...incoming].map((item) => [item.id, item])).values(),
+  ];
+}
+
+/**
  * @type {import('./AccountModel.d.ts').GetAccountModel}
  */
-const getAccountModel = prisma => ({
+export const getAccountModel = (client, db) => ({
   modelName: "Account",
 
   create: async function (username = null) {
     if (!username) return { account: null, error: "username cannot be null" };
 
     try {
-      const account = await prisma.Account.create({
-        data: {
-          username,
-        },
+      // v8: no @default directives in contract, application supplies id
+      const account = await client.Account.create({
+        id: crypto.randomUUID(),
+        username,
       });
 
       return { account, error: null };
@@ -24,10 +57,8 @@ const getAccountModel = prisma => ({
   update: async function (id = null, data = {}) {
     if (!id) throw new Error("No account id provided for update");
     try {
-      const account = await prisma.Account.update({
-        where: { id },
-        data,
-      });
+      // v8: requires prior .where(), returns Row | null
+      const account = await client.Account.where({ id }).update(data);
       return { account, error: null };
     } catch (error) {
       console.error(error.message);
@@ -40,30 +71,20 @@ const getAccountModel = prisma => ({
     // same account would otherwise interleave (both read the old array, both
     // write, one overwrites the other = lost update). Wrap the get + update in
     // a single interactive transaction so the read and write see a consistent
-    // snapshot and serialize against each other. All queries here hit `tx`, the
-    // transaction client — using the outer `prisma` would escape the tx.
+    // snapshot and serialize against each other.
+    //
+    // v8 transaction: db.transaction(async (tx) => tx.orm.Account...)
     try {
-      const account = await prisma.$transaction(async (tx) => {
-        const current = await tx.Account.findFirst({ where: { id } });
+      const account = await db.transaction(async (tx) => {
+        const current = await tx.orm.Account.where({ id }).first();
         if (!current) throw new Error(`account ${id} not found`);
-        const existArr = current[propName] || [];
-        const uniqueArrById = [
-          ...new Map([...existArr, ...arr].map((item) => [item.id, item])).values(),
-        ];
-        return tx.Account.update({
-          where: { id },
-          data: {
-            [propName]: {
-              updateMany: uniqueArrById.reduce(
-                (acc, item) => {
-                  acc.where = { id: item.id };
-                  acc.data = item;
-                  return acc;
-                },
-                { where: {}, data: {} }
-              ),
-            },
-          },
+
+        // globalSetting is a String field (JSON-stringified), not a relation
+        const parsed = JSON.parse(current[propName] || '[]');
+        const merged = mergeArraysById(parsed, arr);
+
+        return tx.orm.Account.where({ id }).update({
+          [propName]: JSON.stringify(merged),
         });
       });
       return { account, error: null };
@@ -75,13 +96,8 @@ const getAccountModel = prisma => ({
 
   get: async function (clause = {}) {
     try {
-      const account = await prisma.Account.findFirst({
-        where: {
-          ...clause
-        },
-        include: {
-        },
-      });
+      // v8: .where(clause).first() returns Row | null
+      const account = await client.Account.where(clause).first();
       return account || null;
     } catch (error) {
       console.error(error.message);
@@ -91,9 +107,8 @@ const getAccountModel = prisma => ({
 
   delete: async function (clause = {}) {
     try {
-      await prisma.Account.delete({
-        where: clause,
-      });
+      // v8: requires prior .where(), .delete() deletes first match
+      await client.Account.where(clause).delete();
       return true;
     } catch (error) {
       console.error(error.message);
@@ -103,11 +118,21 @@ const getAccountModel = prisma => ({
 
   where: async function (clause = {}, limit = null, orderBy = null) {
     try {
-      const results = await prisma.Account.findMany({
-        where: clause,
-        ...(limit !== null ? { take: limit } : {}),
-        ...(orderBy !== null ? { orderBy } : {}),
-      });
+      // v8: .where(clause).orderBy(...).limit(...).all()
+      let query = client.Account.where(clause);
+
+      if (orderBy !== null) {
+        const orderByCallbacks = convertOrderBy(orderBy);
+        if (orderByCallbacks) {
+          query = query.orderBy(orderByCallbacks);
+        }
+      }
+
+      if (limit !== null) {
+        query = query.limit(limit);
+      }
+
+      const results = await query.all();
       return results;
     } catch (error) {
       console.error(error.message);
@@ -116,4 +141,4 @@ const getAccountModel = prisma => ({
   },
 });
 
-module.exports = { getAccountModel };
+export default { getAccountModel };

@@ -1,15 +1,18 @@
-import { Account, PrismaClient, Thread, ThreadMessage } from 'db_client'
+import { Models } from '../generated/db_client/contract'
 
-type CreateParams = Partial<ThreadMessage> & {
+type ThreadMessage = Models.ThreadMessage
+
+type CreateParams<T = any> = Partial<ThreadMessage> & {
   response: T
 }
 
-export type GetThreadMessageModel = (prisma: PrismaClient) => {
+// v8: model factories take (client, db) instead of (prisma)
+export type GetThreadMessageModel = (client: any, db: any) => {
   modelName: string
   defaultName?: string
-  create(param: CreateParams): Promise<{ msg: ThreadMessage | null; error: string | null }>
-  bulkCreate(
-    params: CreateParams[]
+  create<T = any>(param: CreateParams<T>): Promise<{ msg: ThreadMessage | null; error: string | null }>
+  bulkCreate<T = any>(
+    params: CreateParams<T>[]
   ): Promise<{ msgs: ThreadMessage[] | null; error: string | null }>
   get(
     clause: Partial<ThreadMessage>,
@@ -21,7 +24,7 @@ export type GetThreadMessageModel = (prisma: PrismaClient) => {
     clause: Partial<ThreadMessage>,
     limit: number | null,
     orderBy: Partial<Record<keyof ThreadMessage, 'asc' | 'desc'>>[] | null,
-    offset?: keyof ThreadMessage
+    offset?: number
   ): Promise<ThreadMessage[]>
   count(clause: Partial<ThreadMessage>): Promise<number>
 }

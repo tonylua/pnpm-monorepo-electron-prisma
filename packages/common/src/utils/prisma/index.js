@@ -1,13 +1,48 @@
-const { join, resolve } = require('path')
-const { PrismaClient } = require('../../generated/db_client/client')
-const { PrismaNodeSqlite } = require('./nodeSqliteAdapter')
-const getDBConstants = require('./dbConstants')
+import { join, resolve } from 'path'
+import sqlite from '@prisma/orm-sqlite/runtime'
+import { orm } from '@prisma/orm-sqlite/orm-client'
+import { UNBOUND_NAMESPACE_ID } from '@prisma/orm-sqlite/components/ir'
+import { config as dotenvConfig } from 'dotenv'
+import getDBConstants from './dbConstants.js'
+import { createModels } from '../../models/index.js'
+import contractJson from '../../generated/db_client/contract.json' with { type: 'json' }
+
+// NOTE: this source is bundled into a single CJS file (dist/index.js) by esbuild.
+// __dirname resolves to the dist bundle dir at runtime (where build.mjs copies
+// .env/.env.dev), matching the v7 behavior. Do not use import.meta.url — it is
+// empty in CJS output.
+
+// Static runtime factory (v8 pattern: db is the factory, not the connection)
+export const db = sqlite({ contractJson })
 
 /**
- * @type {import('../../types').TypeGetPrisma}
+ * Creates ORM client from runtime
+ * @param {import('@prisma/orm-sqlite/runtime').SqliteRuntime} runtime
+ * @returns {any} ORM client with PascalCase model accessors
  */
-function getPrisma(ctx) {
-  if ('prisma' in global) return global.prisma
+function createOrmClient(runtime) {
+  const context = db.context
+  return orm({ runtime, context })[UNBOUND_NAMESPACE_ID]
+}
+
+/**
+ * Initialize and return Prisma v8 runtime + models
+ * Returns v8 object with wired model instances ready to use.
+ *
+ * For v7 compatibility callers can still do:
+ *   const { Account, Thread, ThreadMessage } = getPrisma(ctx)
+ *   await Account.create(...)
+ *
+ * v8 internals also exposed for advanced uses:
+ *   const { client, runtime, db } = getPrisma(ctx)
+ *
+ * @param {Object} ctx - Context object with optional getEnvPath() method
+ * @returns {Promise<{Account: any, Thread: any, ThreadMessage: any, client: any, runtime: any, db: any}>}
+ */
+export async function getPrisma(ctx) {
+  if (global.prismaRuntime) {
+    return global.prismaRuntime
+  }
 
   let isDev = process.env.NODE_ENV === 'development'
   if (!process.env.IS_WEB) isDev ||= global?.isElectronDev
@@ -21,25 +56,33 @@ function getPrisma(ctx) {
   } else {
     envPath = join(process.resourcesPath, 'prisma/.env')
   }
-  require('dotenv').config({ path: envPath })
+  dotenvConfig({ path: envPath })
 
-  const { dbUrl } = getDBConstants(ctx) // 晚于env调用
+  const constants = getDBConstants(ctx)
+  // v8 uses file path; v7 used file: URL. Support both during migration.
+  const dbPath = constants.dbPath || constants.dbUrl?.replace('file:', '')
 
-  // Prisma 7 is Rust-free: connect through a driver adapter instead of a query
-  // engine binary. We use our node:sqlite adapter (Node 24 / Electron 43 built-in),
-  // so the packaged app ships zero native SQLite dependencies. See nodeSqliteAdapter.js.
-  const adapter = new PrismaNodeSqlite({ url: dbUrl })
+  console.log(
+    ['%c ￥@app/common::getPrisma￥', envPath, dbPath].join('\n'),
+    'color: yellow'
+  )
 
-  const option = {
-    adapter,
-    log: ['error', 'info', 'warn']
-  }
-  console.log(['%c ￥@app/common::getPrisma￥', envPath, dbUrl].join('\n'), 'color: yellow')
+  // Prisma 8 runtime: connect to SQLite database.
+  // The db factory was created at module load; now we connect to the actual file.
+  // Like v7, v8 uses @prisma/orm-sqlite with Node 24+ built-in node:sqlite,
+  // shipping zero native SQLite dependencies. See memory/prisma7-integration-facts.md.
+  const runtime = await db.connect({ path: dbPath })
 
-  const prisma = new PrismaClient(option)
+  // Create ORM client for query builder API
+  const client = createOrmClient(runtime)
 
-  global.prisma = prisma
-  return prisma
+  // Wire up model instances (v7-style interface)
+  const models = createModels(client, db)
+
+  const result = { ...models, client, runtime, db }
+  global.prismaRuntime = result
+
+  return result
 }
 
-module.exports = getPrisma
+export default getPrisma

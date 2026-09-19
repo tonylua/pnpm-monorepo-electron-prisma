@@ -1,7 +1,7 @@
 /**
  * @type {import('./ThreadMessageModel.d.ts').GetThreadMessageModel}
  */
-const getThreadMessageModel = prisma => ({
+export const getThreadMessageModel = (client, db) => ({
   modelName: "ThreadMessage",
 
   create: async function ({
@@ -14,16 +14,17 @@ const getThreadMessageModel = prisma => ({
     response = {},
   }) {
     try {
-      const msg = await prisma.ThreadMessage.create({
-        data: {
-          accountId,
-          threadId,
-          prompt,
-          promptId,
-          chatProvider,
-          chatModel,
-          response: JSON.stringify(response),
-        },
+      const msg = await client.ThreadMessage.create({
+        id: crypto.randomUUID(),
+        accountId,
+        threadId,
+        prompt,
+        promptId,
+        chatProvider: chatProvider || '',
+        chatModel: chatModel || '',
+        response: JSON.stringify(response),
+        createTime: new Date(),
+        updateTime: new Date(),
       });
       return { msg, error: null };
     } catch (error) {
@@ -34,13 +35,17 @@ const getThreadMessageModel = prisma => ({
 
   get: async function (clause = {}, limit = null, orderBy = null) {
     try {
-      const msg = await prisma.ThreadMessage.findFirst({
-        where: {
-          ...clause,
-        },
-        ...(limit !== null ? { take: limit } : {}),
-        ...(orderBy !== null ? { orderBy } : {}),
-      });
+      let query = client.ThreadMessage.where(clause);
+
+      if (orderBy !== null) {
+        query = query.orderBy(convertOrderBy(orderBy));
+      }
+
+      if (limit !== null) {
+        query = query.limit(limit);
+      }
+
+      const msg = await query.first();
       return msg || null;
     } catch (error) {
       console.error(error.message);
@@ -50,9 +55,7 @@ const getThreadMessageModel = prisma => ({
 
   delete: async function (clause = {}) {
     try {
-      await prisma.ThreadMessage.deleteMany({
-        where: clause,
-      });
+      await client.ThreadMessage.where(clause).deleteAll();
       return true;
     } catch (error) {
       console.error(error.message);
@@ -67,12 +70,21 @@ const getThreadMessageModel = prisma => ({
     offset = null
   ) {
     try {
-      const msgs = await prisma.ThreadMessage.findMany({
-        where: clause,
-        ...(limit !== null ? { take: limit } : {}),
-        ...(offset !== null ? { skip: offset } : {}),
-        ...(orderBy !== null ? { orderBy } : {}),
-      });
+      let query = client.ThreadMessage.where(clause);
+
+      if (orderBy !== null) {
+        query = query.orderBy(convertOrderBy(orderBy));
+      }
+
+      if (limit !== null) {
+        query = query.limit(limit);
+      }
+
+      if (offset !== null) {
+        query = query.offset(offset);
+      }
+
+      const msgs = await query.all();
       return msgs;
     } catch (error) {
       console.error(error.message);
@@ -82,10 +94,10 @@ const getThreadMessageModel = prisma => ({
 
   count: async function (clause = {}) {
     try {
-      const count = await prisma.ThreadMessage.count({
-        where: clause,
-      });
-      return count;
+      const result = await client.ThreadMessage
+        .where(clause)
+        .aggregate((agg) => ({ n: agg.count() }));
+      return Number(result.n);
     } catch (error) {
       console.error(error.message);
       return 0;
@@ -94,13 +106,20 @@ const getThreadMessageModel = prisma => ({
 
   bulkCreate: async function (msgsData) {
     try {
-      const createdChats = [];
-      for (const chatData of msgsData) {
-        const msg = await prisma.ThreadMessage.create({
-          data: chatData,
-        });
-        createdChats.push(msg);
-      }
+      const msgsWithDefaults = msgsData.map(d => ({
+        id: crypto.randomUUID(),
+        accountId: d.accountId,
+        threadId: d.threadId,
+        prompt: d.prompt,
+        promptId: d.promptId,
+        chatProvider: d.chatProvider || '',
+        chatModel: d.chatModel || '',
+        response: typeof d.response === 'string' ? d.response : JSON.stringify(d.response),
+        createTime: new Date(),
+        updateTime: new Date(),
+      }));
+
+      const createdChats = await client.ThreadMessage.createAll(msgsWithDefaults);
       return { msgs: createdChats, error: null };
     } catch (error) {
       console.error(error.message);
@@ -109,4 +128,23 @@ const getThreadMessageModel = prisma => ({
   },
 });
 
-module.exports = { getThreadMessageModel };
+/**
+ * Convert v7-style orderBy object to v8-style orderBy callback
+ * @param {Object|Array} orderBy - v7 orderBy format
+ * @returns {Function|Array} v8 orderBy format
+ */
+function convertOrderBy(orderBy) {
+  // Handle array of orderBy objects
+  if (Array.isArray(orderBy)) {
+    return orderBy.map(item => {
+      const [key, direction] = Object.entries(item)[0];
+      return (m) => m[key][direction]();
+    });
+  }
+
+  // Handle single orderBy object
+  const [key, direction] = Object.entries(orderBy)[0];
+  return (m) => m[key][direction]();
+}
+
+export default { getThreadMessageModel };
