@@ -67,19 +67,22 @@ export const getAccountModel = (client, db) => ({
   },
 
   updateArrayProp: async function (id, propName, arr) {
-    // Read-modify-write must be atomic: two concurrent IPC calls updating the
-    // same account would otherwise interleave (both read the old array, both
-    // write, one overwrites the other = lost update). Wrap the get + update in
-    // a single interactive transaction so the read and write see a consistent
-    // snapshot and serialize against each other.
-    //
-    // v8 transaction: db.transaction(async (tx) => tx.orm.Account...)
+    // In v7, 'threads' and 'threadMessages' were Prisma relation fields updated
+    // via nested writes. In v8 those are virtual relations — the data already
+    // lives in Thread/ThreadMessage rows linked by accountId. No denormalization
+    // is needed; skip silently so the renderer call is a no-op.
+    const RELATION_FIELDS = ['threads', 'threadMessages'];
+    if (RELATION_FIELDS.includes(propName)) {
+      return { account: null, error: null };
+    }
+
+    // For actual JSON scalar columns on Account (e.g. globalSetting),
+    // do an atomic read-modify-write inside a transaction.
     try {
       const account = await db.transaction(async (tx) => {
         const current = await tx.orm.Account.where({ id }).first();
         if (!current) throw new Error(`account ${id} not found`);
 
-        // globalSetting is a String field (JSON-stringified), not a relation
         const parsed = JSON.parse(current[propName] || '[]');
         const merged = mergeArraysById(parsed, arr);
 
