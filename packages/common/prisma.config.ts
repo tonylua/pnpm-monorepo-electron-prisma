@@ -1,21 +1,16 @@
-import path from 'node:path'
-import { defineConfig } from 'prisma/config'
-
-// Prisma 7 moved connection configuration out of schema.prisma into this file.
-// This config is used by the Prisma CLI (generate / migrate dev) during development.
-// The runtime (packaged Electron app) connects through the node:sqlite driver adapter
-// and does NOT rely on this file — see src/utils/prisma/index.js.
-
-// Load DATABASE_URL from the dev env file when running CLI commands locally.
-const envUrl = process.env.DATABASE_URL
-const defaultDevUrl = 'file:' + path.join(__dirname, 'src', 'storage', 'myDb.db')
+import path from 'node:path';
+import { defineConfig } from '@prisma/cli-engine';
+import { defineConfig as ormConfig } from '@prisma/orm-sqlite/config';
 
 export default defineConfig({
-  schema: path.join(__dirname, 'src', 'prisma', 'schema.prisma'),
-  migrations: {
-    path: path.join(__dirname, 'src', 'prisma', 'migrations')
-  },
-  datasource: {
-    url: envUrl ?? defaultDevUrl
-  }
-})
+  orm: ormConfig({
+    contract: path.join(__dirname, 'src', 'prisma', 'contract.ts'),
+    output: path.join(__dirname, 'src', 'generated', 'db_client'),
+    db: {
+      connection: process.env.DATABASE_URL || 'file:./data/db.sqlite',
+    },
+    migrations: {
+      dir: path.join(__dirname, 'src', 'prisma', 'migrations'),
+    },
+  }),
+});

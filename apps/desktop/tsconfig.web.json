@@ -12,6 +12,8 @@
     "composite": true,
     "noUnusedLocals": false,
     "skipLibCheck": true,
+    // Prisma 8 uses ESM subpath exports; require modern module resolution
+    "moduleResolution": "bundler",
     "types": [],
     "baseUrl": ".",
     "paths": {

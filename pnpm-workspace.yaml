@@ -12,18 +12,20 @@ allowBuilds:
   electron: true
   electron-winstaller: true
   esbuild: true
+  msgpackr-extract: true
   prisma: true
   vue-demi: true
+  workerd: true
 catalogs:
   electron:
     electron: 43.0.0-beta.3
   'electron-builder':
     'electron-builder': 26.0.11
   prisma:
-    prisma: 7.8.0
-  '@prisma/client':
-    '@prisma/client': 7.8.0
-  '@prisma/driver-adapter-utils':
-    '@prisma/driver-adapter-utils': 7.8.0
+    prisma: 8.0.0-rc.15
+  '@prisma/orm-sqlite':
+    '@prisma/orm-sqlite': 8.0.0-rc.11
+  '@prisma/cli-engine':
+    '@prisma/cli-engine': 0.3.0
   vite:
     vite: 8.0.16

@@ -7,17 +7,16 @@
   "scripts": {
     "build": "pnpm clean && pnpm db:generate && node build.mjs",
     "clean": "rimraf dist",
-    "db:migrate": "prisma migrate dev --name init",
-    "db:generate": "prisma generate",
+    "db:migrate": "prisma db update --yes",
+    "db:generate": "prisma contract emit",
     "test": "node --test"
   },
   "dependencies": {
-    "@prisma/client": "catalog:@prisma/client",
-    "@prisma/driver-adapter-utils": "catalog:@prisma/driver-adapter-utils",
+    "@prisma/orm-sqlite": "catalog:@prisma/orm-sqlite",
     "uuid": "^11.0.5"
   },
   "devDependencies": {
-    "@prisma/config": "7.8.0",
+    "@prisma/cli-engine": "catalog:@prisma/cli-engine",
     "dotenv": "^16.4.7",
     "dotenv-cli": "^8.0.0",
     "esbuild": "^0.25.0",

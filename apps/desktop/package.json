@@ -22,7 +22,7 @@
     "@app/common": "workspace:*",
     "@electron-toolkit/preload": "^3.0.0",
     "@electron-toolkit/utils": "^3.0.0",
-    "@prisma/client": "catalog:@prisma/client",
+    "@prisma/orm-sqlite": "catalog:@prisma/orm-sqlite",
     "dayjs": "^1.11.13",
     "destr": "^2.0.5",
     "dotenv": "^16.4.7",
