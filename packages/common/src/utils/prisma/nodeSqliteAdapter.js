@@ -151,6 +151,17 @@ function mapRow(row, columnTypes) {
   const result = []
   for (let i = 0; i < row.length; i++) {
     const value = row[i]
+
+    // Convert numeric timestamp strings (from TEXT columns storing milliseconds) to ISO-8601
+    // This handles migration from v5 where timestamps were stored as numeric strings
+    if (typeof value === 'string' && /^\d{13}$/.test(value)) {
+      const timestamp = Number(value)
+      if (timestamp > 1000000000000 && timestamp < 9999999999999) {
+        result[i] = new Date(timestamp).toISOString()
+        continue
+      }
+    }
+
     if (
       typeof value === 'number' &&
       (columnTypes[i] === ColumnTypeEnum.Int32 || columnTypes[i] === ColumnTypeEnum.Int64) &&
@@ -159,9 +170,13 @@ function mapRow(row, columnTypes) {
       result[i] = Math.trunc(value)
       continue
     }
-    if (['number', 'bigint'].includes(typeof value) && columnTypes[i] === ColumnTypeEnum.DateTime) {
-      result[i] = new Date(Number(value)).toISOString()
-      continue
+    if (columnTypes[i] === ColumnTypeEnum.DateTime) {
+      // Handle numeric timestamps from DATETIME/TIMESTAMP columns
+      if (['number', 'bigint'].includes(typeof value)) {
+        result[i] = new Date(Number(value)).toISOString()
+        continue
+      }
+      // Already ISO-8601 string, pass through
     }
     if (typeof value === 'bigint') {
       const asNumber = Number(value)

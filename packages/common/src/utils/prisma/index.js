@@ -5,6 +5,7 @@ import { UNBOUND_NAMESPACE_ID } from '@prisma/orm-sqlite/components/ir'
 import { config as dotenvConfig } from 'dotenv'
 import getDBConstants from './dbConstants.js'
 import { createModels } from '../../models/index.js'
+import { sqliteTypeMiddleware } from './sqliteTypeMiddleware.js'
 import contractJson from '../../generated/db_client/contract.json' with { type: 'json' }
 
 // NOTE: this source is bundled into a single CJS file (dist/index.js) by esbuild.
@@ -13,7 +14,7 @@ import contractJson from '../../generated/db_client/contract.json' with { type: 
 // empty in CJS output.
 
 // Static runtime factory (v8 pattern: db is the factory, not the connection)
-export const db = sqlite({ contractJson })
+export const db = sqlite({ contractJson, middleware: [sqliteTypeMiddleware] })
 
 /**
  * Creates ORM client from runtime

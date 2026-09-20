@@ -12,7 +12,7 @@
     "dev": "pnpm build:pkgs && pnpm desktop dev",
     "build:pkgs": "pnpm common build",
     "build:win": "pnpm build:pkgs && pnpm desktop build:win",
-    "init:db": "pnpm common db:migrate && pnpm common db:generate",
+    "init:db": "pnpm common db:generate && pnpm common db:migrate",
     "prepare": "husky",
     "commitlint": "commitlint --config commitlint.config.js",
     "postinstall": "node ./scripts/install.js && pnpm init:db"
