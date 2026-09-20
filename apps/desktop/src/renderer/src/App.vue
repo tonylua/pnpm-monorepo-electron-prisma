@@ -7,6 +7,10 @@ import useDB from "./hooks/useDB";
 const store = useStore();
 const { getAccount, createNewThread, listThreads } = useDB();
 const list = ref<Thread[]>([]);
+// true = multi-db mode is active (analyticsAction exposed by preload)
+const isMultiDb = ref(
+  typeof (window as any).api?.analyticsAction === "function",
+);
 
 onMounted(() => {
   document.body.classList.add("is-electron");
@@ -40,19 +44,32 @@ onMounted(() => {
     <li v-for="thread in list" :key="thread.id">{{ thread.name }}</li>
   </ul>
 
-  <!-- Multi-database hint: this scaffold ships with a single DB by default.
-       Run the command below to scaffold a second (analytics) database. -->
+  <!-- Multi-database hint: dynamically switches between setup/teardown -->
   <aside class="multi-db-hint">
-    <p class="multi-db-hint__title">Need more than one database?</p>
-    <p class="multi-db-hint__body">
-      This scaffold uses a single database by default. To add a second one
-      (analytics example), run:
-    </p>
-    <code class="multi-db-hint__cmd">pnpm common setup:multi-db</code>
-    <p class="multi-db-hint__note">
-      Then <code>pnpm common build</code> and restart. See the README for
-      details.
-    </p>
+    <template v-if="!isMultiDb">
+      <p class="multi-db-hint__title">Need more than one database?</p>
+      <p class="multi-db-hint__body">
+        This scaffold uses a single database by default. To add a second one
+        (analytics example), run:
+      </p>
+      <code class="multi-db-hint__cmd">pnpm common setup:multi-db</code>
+      <p class="multi-db-hint__note">
+        Then <code>pnpm common build</code> and restart. See the README for
+        details.
+      </p>
+    </template>
+    <template v-else>
+      <p class="multi-db-hint__title">Multi-database mode is active</p>
+      <p class="multi-db-hint__body">
+        This scaffold is running with two databases (main + analytics). To
+        revert back to single-database mode, run:
+      </p>
+      <code class="multi-db-hint__cmd">pnpm common teardown:multi-db</code>
+      <p class="multi-db-hint__note">
+        Then <code>pnpm common build</code> and restart. See the README for
+        details.
+      </p>
+    </template>
   </aside>
 </template>
 

@@ -430,13 +430,11 @@ copyDir(
   patchFile(
     preloadPath,
     (content) => {
-      // Add analyticsAction to api object
+      // Add analyticsAction to api object (CRLF-tolerant: match with \r?\n, insert with \n)
       if (!content.includes('analyticsAction')) {
         content = content.replace(
-          /(  persistenceAction: \(model: string, action: string, \.\.\.args\) =>\n    ipcRenderer\.invoke\('llm:persistence-action', model, action, \.\.\.args\),)/,
-          `$1
-  analyticsAction: (model: string, action: string, ...args) =>
-    ipcRenderer.invoke('llm:analytics-action', model, action, ...args),`
+          /(  persistenceAction: \(model: string, action: string, \.\.\.args\) =>\r?\n    ipcRenderer\.invoke\('llm:persistence-action', model, action, \.\.\.args\),)/,
+          `$1\n  analyticsAction: (model: string, action: string, ...args) =>\n    ipcRenderer.invoke('llm:analytics-action', model, action, ...args),`
         )
       }
 
@@ -453,24 +451,12 @@ copyDir(
     appVuePath,
     (content) => {
       // Add analytics example inside onMounted (after the existing setTimeout block)
-      if (!content.includes('analyticsAction')) {
+      // Use \r?\n to tolerate both CRLF and LF files
+      // Check for the actual analytics example code, not just the word "analyticsAction"
+      if (!content.includes('Analytics example: log an app launch event')) {
         content = content.replace(
-          /(      list\.value = threads\n  }, 1000\);)/,
-          `$1
-
-  // Analytics example: log an app launch event
-  setTimeout(async () => {
-    try {
-      const event = await window.api.analyticsAction('AnalyticsEvent', 'create', {
-        type: 'app_launch',
-        timestamp: new Date(),
-        data: JSON.stringify({ version: '1.0.0' })
-      })
-      console.log('Analytics event created:', event)
-    } catch (err) {
-      console.error('Analytics failed:', err)
-    }
-  }, 2000);`
+          /(    list\.value = threads;\r?\n  }, 1000\);)/,
+          `$1\n\n  // Analytics example: log an app launch event\n  setTimeout(async () => {\n    try {\n      const event = await window.api.analyticsAction('AnalyticsEvent', 'create', {\n        type: 'app_launch',\n        timestamp: new Date(),\n        data: JSON.stringify({ version: '1.0.0' })\n      })\n      console.log('Analytics event created:', event)\n    } catch (err) {\n      console.error('Analytics failed:', err)\n    }\n  }, 2000);`
         )
       }
 
