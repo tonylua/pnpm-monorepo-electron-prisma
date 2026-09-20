@@ -453,10 +453,10 @@ copyDir(
       // Add analytics example inside onMounted (after the existing setTimeout block)
       // Use \r?\n to tolerate both CRLF and LF files
       // Check for the actual analytics example code, not just the word "analyticsAction"
-      if (!content.includes('Analytics example: log an app launch event')) {
+      if (!content.includes('Analytics example:')) {
         content = content.replace(
-          /(    list\.value = threads;\r?\n  }, 1000\);)/,
-          `$1\n\n  // Analytics example: log an app launch event\n  setTimeout(async () => {\n    try {\n      const event = await window.api.analyticsAction('AnalyticsEvent', 'create', {\n        type: 'app_launch',\n        timestamp: new Date(),\n        data: JSON.stringify({ version: '1.0.0' })\n      })\n      console.log('Analytics event created:', event)\n    } catch (err) {\n      console.error('Analytics failed:', err)\n    }\n  }, 2000);`
+          /(    await loadThreads\(\);\r?\n  }, 1000\);)/,
+          `$1\n\n  // Analytics example: log an app launch event and load events\n  setTimeout(async () => {\n    try {\n      await window.api.analyticsAction('AnalyticsEvent', 'create', {\n        type: 'app_launch',\n        timestamp: new Date(),\n        data: JSON.stringify({ version: '1.0.0' })\n      })\n      await loadAnalyticsEvents();\n    } catch (err) {\n      console.error('Analytics failed:', err)\n    }\n  }, 2000);`
         )
       }
 
@@ -495,22 +495,20 @@ copyDir(
   console.log()
   log('✓ Multi-database setup complete!', 'green')
   console.log()
+  log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'cyan')
+  log('📦 Multi-database mode is now ACTIVE', 'green')
+  log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'cyan')
+  console.log()
   log('Next steps:', 'cyan')
   console.log('  1. Run: pnpm common build')
   console.log('  2. Test with: pnpm desktop dev')
   console.log()
   log('The analytics database is now ready to use!', 'green')
   console.log()
-  log('To remove the example:', 'yellow')
-  console.log('  - Delete src/prisma/analytics/')
-  console.log('  - Delete prisma.analytics.config.ts')
-  console.log('  - Delete src/utils/prisma/analyticsRuntime.js')
-  console.log('  - Delete src/utils/prisma/analyticsRunPrismaCommand.js')
-  console.log('  - Delete src/models/Analytics*.js and analyticsIndex.js')
-  console.log('  - Remove analytics scripts from package.json')
-  console.log('  - Remove analytics exports from facade.js and types.d.ts')
-  console.log('  - Delete apps/desktop/src/main/utils/analyticsDb.ts')
-  console.log('  - Revert patches to main index.ts, preload, and App.vue')
+  log('To revert back to single-database mode, run:', 'yellow')
+  console.log()
+  console.log(colors.cyan('  pnpm common teardown:multi-db'))
+  console.log()
   console.log()
 }
 

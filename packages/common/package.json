@@ -10,7 +10,8 @@
     "db:migrate": "prisma db update --confirm myDb.db",
     "db:generate": "prisma contract emit",
     "test": "node --test",
-    "setup:multi-db": "node scripts/setup-multi-db.js"
+    "setup:multi-db": "node scripts/setup-multi-db.js",
+    "teardown:multi-db": "node scripts/teardown-multi-db.js"
   },
   "dependencies": {
     "@prisma/orm-sqlite": "catalog:@prisma/orm-sqlite",
