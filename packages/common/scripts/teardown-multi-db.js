@@ -311,9 +311,10 @@ function main() {
   revertPatch(
     appVuePath,
     (content) => {
-      // Remove analytics example code (uses [\s\S] to match across lines)
+      // Remove analytics example code (now includes loadAnalyticsEvents call)
+      // Match from the comment through the closing setTimeout
       return content.replace(
-        /[\r\n]+  \/\/ Analytics example: log an app launch event[\s\S]*?\}, 2000\);/,
+        /[\r\n]+  \/\/ Analytics example:[\s\S]*?await loadAnalyticsEvents\(\);[\s\S]*?\}, 2000\);/,
         ''
       )
     },
