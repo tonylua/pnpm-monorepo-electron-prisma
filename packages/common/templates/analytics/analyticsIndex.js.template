@@ -1,0 +1,17 @@
+import { getAnalyticsEventModel } from './AnalyticsEventModel.js'
+import { getAnalyticsMetaModel } from './AnalyticsMetaModel.js'
+
+/**
+ * Factory to create all analytics model wrappers
+ * @param {*} client - v8 ORM client
+ * @param {*} db - v8 database factory
+ * @returns {{AnalyticsEvent: any, AnalyticsMeta: any}}
+ */
+export function createAnalyticsModels(client, db) {
+  return {
+    AnalyticsEvent: getAnalyticsEventModel(client, db),
+    AnalyticsMeta: getAnalyticsMetaModel(client, db),
+  }
+}
+
+export default createAnalyticsModels

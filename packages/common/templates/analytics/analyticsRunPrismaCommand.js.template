@@ -1,0 +1,62 @@
+const path = require('node:path')
+const { createSqliteControlClient } = require('@prisma/orm-sqlite/control')
+const contractJson = require('../../generated/analytics_db_client/contract.json')
+
+// Analytics DB migration runner — mirrors runPrismaCommand.js but targets the
+// analytics contract + migrations. Each database is fully isolated: its own
+// contract, its own migrations ledger, its own ControlClient invocation.
+//
+// The v8 ControlClient auto-detects schema diffs and applies them idempotently.
+
+/**
+ * Locate the analytics migrations directory.
+ * @param {object} ctx - context with getAnalyticsMigrationsDir()
+ */
+function resolveAnalyticsMigrationsDir(ctx) {
+  if (typeof ctx.getAnalyticsMigrationsDir === 'function') {
+    const dir = ctx.getAnalyticsMigrationsDir()
+    if (dir) return dir
+  }
+  // packaged fallback
+  if (process.resourcesPath) {
+    return path.join(process.resourcesPath, 'prisma', 'analytics', 'migrations')
+  }
+  throw new Error('runAnalyticsPrismaCommand: could not locate analytics migrations directory')
+}
+
+/**
+ * Apply Prisma v8 analytics migrations programmatically using ControlClient.
+ * Idempotent: dbUpdate detects diffs and applies only what's needed.
+ *
+ * @param {object} param
+ * @param {object} param.ctx - context with getAnalyticsDBPath() + getAnalyticsMigrationsDir()
+ */
+async function runAnalyticsPrismaCommand(param) {
+  const { ctx } = param
+  const target = ctx.getAnalyticsDBPath()
+  const migrationsDir = resolveAnalyticsMigrationsDir(ctx)
+
+  const controlClient = createSqliteControlClient()
+
+  try {
+    await controlClient.connect(target)
+
+    const result = await controlClient.dbUpdate({
+      contract: contractJson,
+      mode: 'apply',
+      migrationsDir,
+    })
+
+    if (!result.ok) {
+      const failure = result.failure
+      throw new Error(`Analytics migration failed: ${failure.code} - ${failure.message}`)
+    }
+
+    console.log('  ✓ analytics dbUpdate completed successfully')
+    return 0
+  } finally {
+    await controlClient.close()
+  }
+}
+
+module.exports = runAnalyticsPrismaCommand

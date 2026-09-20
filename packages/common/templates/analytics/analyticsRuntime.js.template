@@ -1,0 +1,64 @@
+import { join, resolve } from 'path'
+import sqlite from '@prisma/orm-sqlite/runtime'
+import { orm } from '@prisma/orm-sqlite/orm-client'
+import { UNBOUND_NAMESPACE_ID } from '@prisma/orm-sqlite/components/ir'
+import { config as dotenvConfig } from 'dotenv'
+import getDBConstants from './dbConstants.js'
+import { createAnalyticsModels } from '../../models/analyticsIndex.js'
+import { sqliteTypeMiddleware } from './sqliteTypeMiddleware.js'
+import contractJson from '../../generated/analytics_db_client/contract.json' with { type: 'json' }
+
+// Static runtime factory for analytics DB (v8 pattern: db is the factory, not the connection)
+export const analyticsDb = sqlite({ contractJson, middleware: [sqliteTypeMiddleware] })
+
+function createOrmClient(runtime) {
+  const context = analyticsDb.context
+  return orm({ runtime, context })[UNBOUND_NAMESPACE_ID]
+}
+
+/**
+ * Initialize and return Prisma v8 analytics runtime + models
+ *
+ * @param {Object} ctx - Context object with getAnalyticsDBPath() method
+ * @returns {Promise<{AnalyticsEvent: any, AnalyticsMeta: any, client: any, runtime: any, db: any}>}
+ */
+export async function getAnalyticsPrisma(ctx) {
+  if (global.analyticsRuntime) {
+    return global.analyticsRuntime
+  }
+
+  let isDev = process.env.NODE_ENV === 'development'
+  if (!process.env.IS_WEB) isDev ||= global?.isElectronDev
+
+  let envPath
+  if (typeof ctx.getEnvPath === 'function') {
+    envPath = ctx.getEnvPath()
+  } else if (isDev) {
+    envPath = resolve(__dirname, '.env.dev')
+  } else {
+    envPath = join(process.resourcesPath, 'prisma/.env')
+  }
+  dotenvConfig({ path: envPath })
+
+  // Get analytics DB path from context
+  const dbPath =
+    typeof ctx.getAnalyticsDBPath === 'function'
+      ? ctx.getAnalyticsDBPath()
+      : join(__dirname, '../storage/analyticsDb.db')
+
+  console.log(
+    ['%c ￥@app/common::getAnalyticsPrisma￥', envPath, dbPath].join('\n'),
+    'color: cyan'
+  )
+
+  const runtime = await analyticsDb.connect({ path: dbPath })
+  const client = createOrmClient(runtime)
+  const models = createAnalyticsModels(client, analyticsDb)
+
+  const result = { ...models, client, runtime, db: analyticsDb }
+  global.analyticsRuntime = result
+
+  return result
+}
+
+export default getAnalyticsPrisma

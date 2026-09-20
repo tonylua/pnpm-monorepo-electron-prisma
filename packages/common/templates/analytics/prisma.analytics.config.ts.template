@@ -1,0 +1,16 @@
+import path from 'node:path'
+import { defineConfig } from '@prisma/cli-engine'
+import { defineConfig as ormConfig } from '@prisma/orm-sqlite/config'
+
+export default defineConfig({
+  orm: ormConfig({
+    contract: path.join(__dirname, 'src', 'prisma', 'analytics', 'contract.ts'),
+    output: path.join(__dirname, 'src', 'generated', 'analytics_db_client'),
+    db: {
+      connection: process.env.ANALYTICS_DATABASE_URL || 'file:./src/storage/analyticsDb.db',
+    },
+    migrations: {
+      dir: path.join(__dirname, 'src', 'prisma', 'analytics', 'migrations'),
+    },
+  }),
+})

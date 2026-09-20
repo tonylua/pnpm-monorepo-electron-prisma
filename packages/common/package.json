@@ -9,7 +9,8 @@
     "clean": "rimraf dist",
     "db:migrate": "prisma db update --confirm myDb.db",
     "db:generate": "prisma contract emit",
-    "test": "node --test"
+    "test": "node --test",
+    "setup:multi-db": "node scripts/setup-multi-db.js"
   },
   "dependencies": {
     "@prisma/orm-sqlite": "catalog:@prisma/orm-sqlite",

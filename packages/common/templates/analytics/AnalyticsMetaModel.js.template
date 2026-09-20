@@ -1,0 +1,58 @@
+/**
+ * AnalyticsMeta model wrapper (v8 ORM API)
+ * Key-value store for analytics metadata (config, timestamps, etc.)
+ */
+export const getAnalyticsMetaModel = (client, db) => ({
+  modelName: 'AnalyticsMeta',
+
+  set: async function (key, value) {
+    if (!key) return { meta: null, error: 'key is required' }
+
+    try {
+      // Upsert pattern: check if exists, then update or create
+      const existing = await client.AnalyticsMeta.where({ key }).first()
+
+      if (existing) {
+        const meta = await client.AnalyticsMeta.where({ key }).update({ value })
+        return { meta, error: null }
+      } else {
+        const meta = await client.AnalyticsMeta.create({ key, value })
+        return { meta, error: null }
+      }
+    } catch (error) {
+      console.error('AnalyticsMeta set failed:', error.message)
+      return { meta: null, error: error.message }
+    }
+  },
+
+  get: async function (key) {
+    try {
+      const meta = await client.AnalyticsMeta.where({ key }).first()
+      return meta ? meta.value : null
+    } catch (error) {
+      console.error('AnalyticsMeta get failed:', error.message)
+      return null
+    }
+  },
+
+  delete: async function (key) {
+    try {
+      await client.AnalyticsMeta.where({ key }).delete()
+      return true
+    } catch (error) {
+      console.error('AnalyticsMeta delete failed:', error.message)
+      return false
+    }
+  },
+
+  all: async function () {
+    try {
+      return await client.AnalyticsMeta.where({}).all()
+    } catch (error) {
+      console.error('AnalyticsMeta all failed:', error.message)
+      return []
+    }
+  },
+})
+
+export default { getAnalyticsMetaModel }
