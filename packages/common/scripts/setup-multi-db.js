@@ -179,10 +179,13 @@ export { handleAnalyticsAction, initAnalyticsDB } from './analyticsDb'`
         )
       }
 
-      // Add getAnalyticsDBPath method
+      // Add getAnalyticsDBPath and getAnalyticsMigrationsDir methods.
+      // Match the last property value (getMigrationsDir's return) and append a
+      // comma + the new methods BEFORE the object's closing brace. The capture
+      // deliberately stops at the ')' so the closing '}' is left untouched.
       if (!content.includes('getAnalyticsDBPath')) {
         content = content.replace(
-          /(getMigrationsDir: \(\) =>[^}]+\})/,
+          /(: path\.resolve\(app\.getAppPath\(\)\.replace\('app\.asar', ''\), 'prisma\/migrations'\))/,
           `$1,
 
   getAnalyticsDBPath: () =>
@@ -477,15 +480,38 @@ copyDir(
   )
   console.log()
 
+  // Step 14: Generate analytics client (required before next build)
+  log('Step 14: Generate analytics database client', 'cyan')
+  const { execSync } = require('node:child_process')
+  try {
+    execSync('pnpm db:generate:analytics', { cwd: ROOT, stdio: 'inherit' })
+    log('✓ Analytics client generated', 'green')
+  } catch (error) {
+    log('✗ Failed to generate analytics client', 'red')
+    console.error(error.message)
+    process.exit(1)
+  }
+  console.log()
+
+  // Step 15: Create initial migration
+  log('Step 15: Create analytics database migration', 'cyan')
+  try {
+    execSync('pnpm db:migrate:analytics', { cwd: ROOT, stdio: 'inherit' })
+    log('✓ Analytics migration created', 'green')
+  } catch (error) {
+    log('✗ Failed to create analytics migration', 'red')
+    console.error(error.message)
+    process.exit(1)
+  }
+  console.log()
+
   // Final instructions
   console.log()
   log('✓ Multi-database setup complete!', 'green')
   console.log()
   log('Next steps:', 'cyan')
-  console.log('  1. Run: pnpm common db:generate:analytics')
-  console.log('  2. Run: pnpm common db:migrate:analytics')
-  console.log('  3. Run: pnpm common build')
-  console.log('  4. Test with: pnpm desktop dev')
+  console.log('  1. Run: pnpm common build')
+  console.log('  2. Test with: pnpm desktop dev')
   console.log()
   log('The analytics database is now ready to use!', 'green')
   console.log()
