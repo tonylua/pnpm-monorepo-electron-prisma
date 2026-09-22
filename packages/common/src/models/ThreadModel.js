@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { withGeneratedId } from '../utils/idUtils.js'
 
 /**
  * Convert v7-style orderBy to v8 callback form
@@ -33,8 +33,7 @@ const getThreadModel = (client, db) => ({
   create: async function (account, data = {}) {
     try {
       const now = new Date();
-      const thread = await client.Thread.create({
-        id: randomUUID(),
+      const thread = await withGeneratedId(client.Thread.create)({
         name: data.name ? String(data.name) : this.defaultName,
         accountId: account.id,
         vectorSearchMode: 'default',

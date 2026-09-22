@@ -31,6 +31,8 @@ function mergeArraysById(existing, incoming) {
   ];
 }
 
+import { withGeneratedId } from '../utils/idUtils.js'
+
 /**
  * @type {import('./AccountModel.d.ts').GetAccountModel}
  */
@@ -42,8 +44,7 @@ export const getAccountModel = (client, db) => ({
 
     try {
       // v8: no @default directives in contract, application supplies id
-      const account = await client.Account.create({
-        id: crypto.randomUUID(),
+      const account = await withGeneratedId(client.Account.create)({
         username,
       });
 

@@ -1,3 +1,5 @@
+import { withGeneratedId, randomUUID } from '../utils/idUtils.js'
+
 /**
  * @type {import('./ThreadMessageModel.d.ts').GetThreadMessageModel}
  */
@@ -14,8 +16,7 @@ export const getThreadMessageModel = (client, db) => ({
     response = {},
   }) {
     try {
-      const msg = await client.ThreadMessage.create({
-        id: crypto.randomUUID(),
+      const msg = await withGeneratedId(client.ThreadMessage.create)({
         accountId,
         threadId,
         prompt,
@@ -107,7 +108,7 @@ export const getThreadMessageModel = (client, db) => ({
   bulkCreate: async function (msgsData) {
     try {
       const msgsWithDefaults = msgsData.map(d => ({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         accountId: d.accountId,
         threadId: d.threadId,
         prompt: d.prompt,
