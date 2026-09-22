@@ -17,6 +17,36 @@ const dist = path.join(__dirname, 'dist')
 fs.rmSync(dist, { recursive: true, force: true })
 fs.mkdirSync(dist, { recursive: true })
 
+// Generate the boolean-field registry from the contract source BEFORE
+// bundling so esbuild can inline it (sqliteTypeMiddleware.js imports it).
+// v8 SQLite has no BOOLEAN column type; the contracts map v7 `Boolean` fields
+// onto textColumn, and the emitted contract.json no longer distinguishes them
+// from plain strings (both sqlite/text@1, no default). The only reliable
+// source of "which TEXT fields are booleans" is the contract source itself:
+// fields whose default is the literal 'true'/'false'. Re-running build
+// regenerates it — adding a Boolean-mapped field to the contract needs no
+// further code change.
+function generateBoolFieldsRegistry(contractRel, outRel) {
+  const src = fs.readFileSync(path.join(__dirname, contractRel), 'utf8')
+  const modelRe = /model\(\s*'(\w+)'\s*,\s*\{\s*fields:\s*\{([\s\S]*?)\n\s*\}\s*\n?\s*\}\s*\)/g
+  const fieldRe = /(\w+):\s*field\.column\([^)]*\)(?:\.\w+\([^)]*\))*\.default\(\s*'(true|false)'\s*\)/g
+  const registry = {}
+  let m
+  while ((m = modelRe.exec(src))) {
+    const fields = []
+    const fr = new RegExp(fieldRe.source, 'g')
+    let f
+    while ((f = fr.exec(m[2]))) fields.push(f[1])
+    if (fields.length) registry[m[1]] = fields
+  }
+  const outPath = path.join(__dirname, outRel)
+  fs.mkdirSync(path.dirname(outPath), { recursive: true })
+  fs.writeFileSync(outPath, JSON.stringify(registry, null, 2) + '\n')
+  return registry
+}
+
+generateBoolFieldsRegistry('src/prisma/contract.ts', 'src/generated/db_client/bool_fields.json')
+
 await build({
   entryPoints: [path.join(__dirname, 'src/facade.js')],
   bundle: true,

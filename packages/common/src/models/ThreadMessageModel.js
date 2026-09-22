@@ -28,7 +28,7 @@ export const getThreadMessageModel = (client, db) => ({
       });
       return { msg, error: null };
     } catch (error) {
-      console.error(error.message);
+      console.error('[ThreadMessage] create failed:', error.message);
       return { msg: null, error: error.message };
     }
   },
@@ -48,7 +48,7 @@ export const getThreadMessageModel = (client, db) => ({
       const msg = await query.first();
       return msg || null;
     } catch (error) {
-      console.error(error.message);
+      console.error('[ThreadMessage] get failed:', error.message);
       return null;
     }
   },
@@ -58,7 +58,7 @@ export const getThreadMessageModel = (client, db) => ({
       await client.ThreadMessage.where(clause).deleteAll();
       return true;
     } catch (error) {
-      console.error(error.message);
+      console.error('[ThreadMessage] delete failed:', error.message);
       return false;
     }
   },
@@ -87,7 +87,7 @@ export const getThreadMessageModel = (client, db) => ({
       const msgs = await query.all();
       return msgs;
     } catch (error) {
-      console.error(error.message);
+      console.error('[ThreadMessage] where failed:', error.message);
       return [];
     }
   },
@@ -99,7 +99,7 @@ export const getThreadMessageModel = (client, db) => ({
         .aggregate((agg) => ({ n: agg.count() }));
       return Number(result.n);
     } catch (error) {
-      console.error(error.message);
+      console.error('[ThreadMessage] count failed:', error.message);
       return 0;
     }
   },
@@ -122,7 +122,7 @@ export const getThreadMessageModel = (client, db) => ({
       const createdChats = await client.ThreadMessage.createAll(msgsWithDefaults);
       return { msgs: createdChats, error: null };
     } catch (error) {
-      console.error(error.message);
+      console.error('[ThreadMessage] bulkCreate failed:', error.message);
       return { msgs: null, error: error.message };
     }
   },

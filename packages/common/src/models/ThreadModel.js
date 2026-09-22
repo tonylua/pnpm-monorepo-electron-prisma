@@ -44,7 +44,7 @@ const getThreadModel = (client, db) => ({
 
       return { thread, error: null };
     } catch (error) {
-      console.error(error.message);
+      console.error('[Thread] create failed:', error.message);
       return { thread: null, error: error.message };
     }
   },
@@ -59,7 +59,7 @@ const getThreadModel = (client, db) => ({
       });
       return { thread, error: null };
     } catch (error) {
-      console.error(error.message);
+      console.error('[Thread] update failed:', error.message);
       return { thread: null, error: error.message };
     }
   },
@@ -70,7 +70,7 @@ const getThreadModel = (client, db) => ({
 
       return thread || null;
     } catch (error) {
-      console.error(error.message);
+      console.error('[Thread] get failed:', error.message);
       return null;
     }
   },
@@ -80,7 +80,7 @@ const getThreadModel = (client, db) => ({
       await client.Thread.where(clause).deleteAll();
       return true;
     } catch (error) {
-      console.error(error.message);
+      console.error('[Thread] delete failed:', error.message);
       return false;
     }
   },
@@ -103,7 +103,7 @@ const getThreadModel = (client, db) => ({
       const results = await query.all();
       return results;
     } catch (error) {
-      console.error(error.message);
+      console.error('[Thread] where failed:', error.message);
       return [];
     }
   },

@@ -49,7 +49,7 @@ export const getAccountModel = (client, db) => ({
 
       return { account, error: null };
     } catch (error) {
-      console.error(error.message);
+      console.error('[Account] create failed:', error.message);
       return { account: null, error: error.message };
     }
   },
@@ -61,7 +61,7 @@ export const getAccountModel = (client, db) => ({
       const account = await client.Account.where({ id }).update(data);
       return { account, error: null };
     } catch (error) {
-      console.error(error.message);
+      console.error('[Account] update failed:', error.message);
       return { account: null, error: error.message };
     }
   },
@@ -92,7 +92,7 @@ export const getAccountModel = (client, db) => ({
       });
       return { account, error: null };
     } catch (error) {
-      console.error(error.message);
+      console.error('[Account] updateArrayProp failed:', error.message);
       return { account: null, error: error.message };
     }
   },
@@ -103,7 +103,7 @@ export const getAccountModel = (client, db) => ({
       const account = await client.Account.where(clause).first();
       return account || null;
     } catch (error) {
-      console.error(error.message);
+      console.error('[Account] get failed:', error.message);
       return null;
     }
   },
@@ -114,7 +114,7 @@ export const getAccountModel = (client, db) => ({
       await client.Account.where(clause).delete();
       return true;
     } catch (error) {
-      console.error(error.message);
+      console.error('[Account] delete failed:', error.message);
       return false;
     }
   },
@@ -138,7 +138,7 @@ export const getAccountModel = (client, db) => ({
       const results = await query.all();
       return results;
     } catch (error) {
-      console.error(error.message);
+      console.error('[Account] where failed:', error.message);
       return [];
     }
   },
