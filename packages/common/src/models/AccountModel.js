@@ -1,25 +1,4 @@
 /**
- * Convert v7-style orderBy to v8 callback form
- * @param {object|Array|null} orderBy - v7 format like { createTime: 'desc' } or [{ name: 'asc' }]
- * @returns {Function|Function[]} v8 format like (a) => a.createTime.desc() or array of callbacks
- */
-function convertOrderBy(orderBy) {
-  if (!orderBy) return undefined;
-
-  // Handle array of orderBy objects
-  if (Array.isArray(orderBy)) {
-    return orderBy.map(item => {
-      const [key, direction] = Object.entries(item)[0];
-      return (a) => a[key][direction]();
-    });
-  }
-
-  // Handle single orderBy object
-  const [key, direction] = Object.entries(orderBy)[0];
-  return (a) => a[key][direction]();
-}
-
-/**
  * Merge arrays by id, keeping the latest version of each item
  * @param {Array} existing - existing array
  * @param {Array} incoming - incoming array to merge
@@ -32,6 +11,7 @@ function mergeArraysById(existing, incoming) {
 }
 
 import { withGeneratedId } from '../utils/idUtils.js'
+import { buildOrderBy } from './queryUtils.js'
 
 /**
  * @type {import('./AccountModel.d.ts').GetAccountModel}
@@ -44,9 +24,11 @@ export const getAccountModel = (client, db) => ({
 
     try {
       // v8: no @default directives in contract, application supplies id
-      const account = await withGeneratedId(client.Account.create)({
-        username,
-      });
+      const account = await client.Account.create(
+        withGeneratedId({
+          username,
+        })
+      );
 
       return { account, error: null };
     } catch (error) {
@@ -125,11 +107,9 @@ export const getAccountModel = (client, db) => ({
       // v8: .where(clause).orderBy(...).limit(...).all()
       let query = client.Account.where(clause);
 
-      if (orderBy !== null) {
-        const orderByCallbacks = convertOrderBy(orderBy);
-        if (orderByCallbacks) {
-          query = query.orderBy(orderByCallbacks);
-        }
+      const orderByCallbacks = buildOrderBy(orderBy);
+      if (orderByCallbacks) {
+        query = query.orderBy(orderByCallbacks);
       }
 
       if (limit !== null) {

@@ -1,4 +1,5 @@
-import { withGeneratedId, randomUUID } from '../utils/idUtils.js'
+import { withGeneratedId } from '../utils/idUtils.js'
+import { buildOrderBy } from './queryUtils.js'
 
 /**
  * @type {import('./ThreadMessageModel.d.ts').GetThreadMessageModel}
@@ -16,17 +17,19 @@ export const getThreadMessageModel = (client, db) => ({
     response = {},
   }) {
     try {
-      const msg = await withGeneratedId(client.ThreadMessage.create)({
-        accountId,
-        threadId,
-        prompt,
-        promptId,
-        chatProvider: chatProvider || '',
-        chatModel: chatModel || '',
-        response: JSON.stringify(response),
-        createTime: new Date(),
-        updateTime: new Date(),
-      });
+      const msg = await client.ThreadMessage.create(
+        withGeneratedId({
+          accountId,
+          threadId,
+          prompt,
+          promptId,
+          chatProvider: chatProvider || '',
+          chatModel: chatModel || '',
+          response: JSON.stringify(response),
+          createTime: new Date(),
+          updateTime: new Date(),
+        })
+      );
       return { msg, error: null };
     } catch (error) {
       console.error('[ThreadMessage] create failed:', error.message);
@@ -38,8 +41,9 @@ export const getThreadMessageModel = (client, db) => ({
     try {
       let query = client.ThreadMessage.where(clause);
 
-      if (orderBy !== null) {
-        query = query.orderBy(convertOrderBy(orderBy));
+      const orderByCallbacks = buildOrderBy(orderBy);
+      if (orderByCallbacks) {
+        query = query.orderBy(orderByCallbacks);
       }
 
       if (limit !== null) {
@@ -73,8 +77,9 @@ export const getThreadMessageModel = (client, db) => ({
     try {
       let query = client.ThreadMessage.where(clause);
 
-      if (orderBy !== null) {
-        query = query.orderBy(convertOrderBy(orderBy));
+      const orderByCallbacks = buildOrderBy(orderBy);
+      if (orderByCallbacks) {
+        query = query.orderBy(orderByCallbacks);
       }
 
       if (limit !== null) {
@@ -107,8 +112,7 @@ export const getThreadMessageModel = (client, db) => ({
 
   bulkCreate: async function (msgsData) {
     try {
-      const msgsWithDefaults = msgsData.map(d => ({
-        id: randomUUID(),
+      const msgsWithDefaults = msgsData.map(d => withGeneratedId({
         accountId: d.accountId,
         threadId: d.threadId,
         prompt: d.prompt,
@@ -128,24 +132,5 @@ export const getThreadMessageModel = (client, db) => ({
     }
   },
 });
-
-/**
- * Convert v7-style orderBy object to v8-style orderBy callback
- * @param {Object|Array} orderBy - v7 orderBy format
- * @returns {Function|Array} v8 orderBy format
- */
-function convertOrderBy(orderBy) {
-  // Handle array of orderBy objects
-  if (Array.isArray(orderBy)) {
-    return orderBy.map(item => {
-      const [key, direction] = Object.entries(item)[0];
-      return (m) => m[key][direction]();
-    });
-  }
-
-  // Handle single orderBy object
-  const [key, direction] = Object.entries(orderBy)[0];
-  return (m) => m[key][direction]();
-}
 
 export default { getThreadMessageModel };

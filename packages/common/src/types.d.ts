@@ -1,5 +1,4 @@
 import type { Models, Contract } from './generated/db_client/contract'
-import type { Models as AnalyticsModels, Contract as AnalyticsContract } from './generated/analytics_db_client/contract'
 import { DBModelsGetterMap } from './models'
 
 // Re-export the v8 generated contract types so consumers import from '@app/common'
@@ -8,11 +7,6 @@ export type { Models, Contract }
 export type Account = Models.Account
 export type Thread = Models.Thread
 export type ThreadMessage = Models.ThreadMessage
-
-// Analytics DB types
-export type { AnalyticsModels, AnalyticsContract }
-export type AnalyticsEvent = AnalyticsModels.AnalyticsEvent
-export type AnalyticsMeta = AnalyticsModels.AnalyticsMeta
 
 // v8 doesn't have Prisma.ModelName; create a compatible namespace for existing code
 export namespace Prisma {
@@ -59,26 +53,10 @@ export type RunPrismaCmdParam = {
 }
 export type TypeRunPrismaCommand = (param: RunPrismaCmdParam) => Promise<number>
 
-export type TypeGetAnalyticsPrisma = (ctx: IContextDB) => Promise<{
-  AnalyticsEvent: any
-  AnalyticsMeta: any
-  client: any
-  runtime: any
-  db: any
-}>
-
-export type RunAnalyticsPrismaCmdParam = {
-  ctx: IContextDB
-}
-export type TypeRunAnalyticsPrismaCommand = (param: RunAnalyticsPrismaCmdParam) => Promise<number>
-
 export interface IFacade {
   getPrisma: TypeGetPrisma
   getDBConstants: TypeGetDBConstants
   DBModels: TypeDBModels
   DB_FILE_NAME: string
   runPrismaCommand: TypeRunPrismaCommand
-  getAnalyticsPrisma: TypeGetAnalyticsPrisma
-  runAnalyticsPrismaCommand: TypeRunAnalyticsPrismaCommand
-  ANALYTICS_DB_FILE_NAME: string
 }

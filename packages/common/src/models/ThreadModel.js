@@ -1,26 +1,5 @@
 import { withGeneratedId } from '../utils/idUtils.js'
-
-/**
- * Convert v7-style orderBy to v8 callback form
- * @param {object|Array|null} orderBy - v7 format like { createTime: 'desc' } or [{ updateTime: 'desc' }]
- * @returns {Function[]} v8 format like [(t) => t.createTime.desc()]
- */
-function convertOrderBy(orderBy) {
-  if (!orderBy) return [];
-
-  // Array form: [{ updateTime: 'desc' }, { name: 'asc' }]
-  if (Array.isArray(orderBy)) {
-    return orderBy.map((item) => {
-      const [field, direction] = Object.entries(item)[0];
-      return (t) => t[field][direction]();
-    });
-  }
-
-  // Single object form: { createTime: 'desc' }
-  return Object.entries(orderBy).map(([field, direction]) => {
-    return (t) => t[field][direction]();
-  });
-}
+import { buildOrderBy } from './queryUtils.js'
 
 /**
  * @type {import('./ThreadModel.d.ts').GetThreadModel}
@@ -33,13 +12,15 @@ const getThreadModel = (client, db) => ({
   create: async function (account, data = {}) {
     try {
       const now = new Date();
-      const thread = await withGeneratedId(client.Thread.create)({
-        name: data.name ? String(data.name) : this.defaultName,
-        accountId: account.id,
-        vectorSearchMode: 'default',
-        createTime: now,
-        updateTime: now,
-      });
+      const thread = await client.Thread.create(
+        withGeneratedId({
+          name: data.name ? String(data.name) : this.defaultName,
+          accountId: account.id,
+          vectorSearchMode: 'default',
+          createTime: now,
+          updateTime: now,
+        })
+      );
 
       return { thread, error: null };
     } catch (error) {
@@ -88,11 +69,9 @@ const getThreadModel = (client, db) => ({
     try {
       let query = client.Thread.where(clause);
 
-      if (orderBy !== null) {
-        const orderByCallbacks = convertOrderBy(orderBy);
-        if (orderByCallbacks.length > 0) {
-          query = query.orderBy(orderByCallbacks);
-        }
+      const orderByCallbacks = buildOrderBy(orderBy);
+      if (orderByCallbacks) {
+        query = query.orderBy(orderByCallbacks);
       }
 
       if (limit !== null) {

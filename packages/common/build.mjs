@@ -17,27 +17,38 @@ const dist = path.join(__dirname, 'dist')
 fs.rmSync(dist, { recursive: true, force: true })
 fs.mkdirSync(dist, { recursive: true })
 
-// Generate the boolean-field registry from the contract source BEFORE
-// bundling so esbuild can inline it (sqliteTypeMiddleware.js imports it).
-// v8 SQLite has no BOOLEAN column type; the contracts map v7 `Boolean` fields
-// onto textColumn, and the emitted contract.json no longer distinguishes them
-// from plain strings (both sqlite/text@1, no default). The only reliable
-// source of "which TEXT fields are booleans" is the contract source itself:
-// fields whose default is the literal 'true'/'false'. Re-running build
-// regenerates it — adding a Boolean-mapped field to the contract needs no
-// further code change.
-function generateBoolFieldsRegistry(contractRel, outRel) {
-  const src = fs.readFileSync(path.join(__dirname, contractRel), 'utf8')
-  const modelRe = /model\(\s*'(\w+)'\s*,\s*\{\s*fields:\s*\{([\s\S]*?)\n\s*\}\s*\n?\s*\}\s*\)/g
-  const fieldRe = /(\w+):\s*field\.column\([^)]*\)(?:\.\w+\([^)]*\))*\.default\(\s*'(true|false)'\s*\)/g
+// Generate the boolean-field registry BEFORE bundling so esbuild can inline it
+// (sqliteTypeMiddleware.js imports it).
+//
+// v8 SQLite has no BOOLEAN column type: contracts map boolean fields onto
+// textColumn holding 'true'/'false'. The emitted contract.json keeps each
+// column's `default` ({ kind: 'literal', value: 'true' }), so it — not the
+// contract source — is the registry's data source. Reading the emitted JSON
+// avoids regex-matching the TS source, which silently produced `{}` whenever
+// the model block ended with a trailing comma.
+//
+// Consequence to keep in mind when extending the contract: only boolean fields
+// declared with a literal string default are detectable. A boolean column with
+// no default cannot be distinguished from a plain string column by any emitted
+// artifact, so it must be given `.default('false')` to be decoded.
+function generateBoolFieldsRegistry(contractJsonRel, outRel) {
+  const jsonPath = path.join(__dirname, contractJsonRel)
+  if (!fs.existsSync(jsonPath)) {
+    throw new Error(`generateBoolFieldsRegistry: ${contractJsonRel} not found. Run "pnpm db:generate" first.`)
+  }
+  const json = JSON.parse(fs.readFileSync(jsonPath, 'utf8'))
   const registry = {}
-  let m
-  while ((m = modelRe.exec(src))) {
-    const fields = []
-    const fr = new RegExp(fieldRe.source, 'g')
-    let f
-    while ((f = fr.exec(m[2]))) fields.push(f[1])
-    if (fields.length) registry[m[1]] = fields
+  for (const ns of Object.values(json?.storage?.namespaces ?? {})) {
+    for (const [model, table] of Object.entries(ns?.entries?.table ?? {})) {
+      const fields = Object.entries(table.columns ?? {})
+        .filter(([, col]) => (
+          col.codecId === 'sqlite/text@1' &&
+          col.default?.kind === 'literal' &&
+          (col.default.value === 'true' || col.default.value === 'false')
+        ))
+        .map(([name]) => name)
+      if (fields.length) registry[model] = fields
+    }
   }
   const outPath = path.join(__dirname, outRel)
   fs.mkdirSync(path.dirname(outPath), { recursive: true })
@@ -45,7 +56,7 @@ function generateBoolFieldsRegistry(contractRel, outRel) {
   return registry
 }
 
-generateBoolFieldsRegistry('src/prisma/contract.ts', 'src/generated/db_client/bool_fields.json')
+generateBoolFieldsRegistry('src/generated/db_client/contract.json', 'src/generated/db_client/bool_fields.json')
 
 await build({
   entryPoints: [path.join(__dirname, 'src/facade.js')],
