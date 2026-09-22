@@ -21,6 +21,10 @@ export interface IContextDB {
   getMigrationsDir?: () => string
   getSchemaPrismaPath?: () => string
   getEnvPath?: () => string
+  // Optional multi-DB (analytics) paths. Injected by scripts/setup-multi-db.js
+  // when the analytics DB is enabled; absent in single-DB setups.
+  getAnalyticsDBPath?: () => string
+  getAnalyticsMigrationsDir?: () => string
 }
 
 export type TypeDBConstants = {
