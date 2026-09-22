@@ -12,9 +12,31 @@ export const isDev = process.env.NODE_ENV === "development";
 process.env.DATABASE_URL = `file:${dbPath}`;
 
 // Prisma 8: getPrisma() is async and returns { Account, Thread, ThreadMessage, client, runtime, db }.
-// The models are already wired and ready to use. Store the promise so initDB and IPC handler
-// can both await it.
-const prismaPromise = getPrisma(dbContext);
+// The models are already wired and ready to use. Three-layer memoization is a preventive
+// guard added during the v8 migration: concurrent initDB + IPC handler could otherwise race
+// getPrisma() and surface as DRIVER.ALREADY_CONNECTED. The race was identified by inspection,
+// not observed in practice:
+// 1. Sync cache (_prisma) — instant return on subsequent calls
+// 2. In-flight promise gate (_prismaPromise) — races queue on the same promise
+// 3. finally() cleanup — _prismaPromise resets after settle, allowing retry on failure
+type PrismaRuntime = Awaited<ReturnType<typeof getPrisma>>;
+let _prisma: PrismaRuntime | null = null;
+let _prismaPromise: Promise<PrismaRuntime> | null = null;
+function loadPrismaRuntime(): Promise<PrismaRuntime> {
+  if (_prisma) return Promise.resolve(_prisma);
+  if (!_prismaPromise) {
+    _prismaPromise = getPrisma(dbContext)
+      .then((runtime) => {
+        _prisma = runtime;
+        return runtime;
+      })
+      .finally(() => {
+        _prismaPromise = null;
+      });
+  }
+  return _prismaPromise;
+}
+const prismaPromise = loadPrismaRuntime();
 
 // Prisma 8 uses ControlClient for runtime migrations: dbUpdate is idempotent and
 // auto-detects diffs, eliminating the need for the v7 timestamp-comparison logic
