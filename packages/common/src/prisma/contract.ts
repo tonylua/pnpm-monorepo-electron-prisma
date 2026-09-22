@@ -7,6 +7,8 @@ const Account = model('Account', {
     username: field.column(textColumn).unique(),
     email: field.column(textColumn).optional().unique(),
     globalSetting: field.column(textColumn).optional(),
+    // Boolean fields: orm-sqlite rc.11 has no booleanColumn; store as text 'true'/'false'.
+    isActive: field.column(textColumn).default('true'),
   },
 });
 

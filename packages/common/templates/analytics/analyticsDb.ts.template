@@ -29,7 +29,10 @@ let analyticsPrismaPromise: ReturnType<typeof getAnalyticsPrisma> | null = null
  */
 export async function initAnalyticsDB() {
   try {
-    const dbPath = dbContext.getAnalyticsDBPath()
+    const dbPath =
+      typeof (dbContext as any).getAnalyticsDBPath === 'function'
+        ? (dbContext as any).getAnalyticsDBPath()
+        : path.join(path.dirname(dbContext.getDBPath()), ANALYTICS_DB_FILE_NAME)
     const dbExists = fs.existsSync(dbPath)
 
     if (!dbExists) {
