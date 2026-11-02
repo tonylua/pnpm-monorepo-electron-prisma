@@ -15,6 +15,12 @@
     "dev": "chcp 65001 && electron-vite dev -- --watch",
     "build": "pnpm run typecheck && electron-vite build",
     "postinstall": "electron-builder install-app-deps",
+    "vfs:probe": "cross-env ELECTRON_RUN_AS_NODE=1 electron ../../scripts/sqlite-vfs/probe-runtime.cjs",
+    "vfs:verify": "electron ../../scripts/sqlite-vfs/smoke-electron.cjs",
+    "vfs:fault": "cross-env ELECTRON_RUN_AS_NODE=1 electron ../../scripts/sqlite-vfs/fault-vfs.cjs",
+    "vfs:recover": "cross-env ELECTRON_RUN_AS_NODE=1 electron ../../scripts/sqlite-vfs/migrate-recover.cjs",
+    "vfs:real": "cross-env ELECTRON_RUN_AS_NODE=1 electron ../../scripts/sqlite-vfs/migrate-real-db.cjs",
+    "vfs:inspect": "electron --user-data-dir=\"%APPDATA%/@app/desktop\" ../../scripts/sqlite-vfs/inspect-dev-db.cjs",
     "build:unpack": "pnpm run build && electron-builder --dir",
     "build:win": "rimraf dist && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false pnpm run build && electron-builder --win"
   },

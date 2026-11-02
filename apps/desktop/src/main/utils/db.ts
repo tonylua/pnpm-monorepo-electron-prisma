@@ -1,7 +1,14 @@
 import fs from "node:fs";
+import { app } from "electron";
 import type { IFacade } from "@app/common";
 import * as commonFacade from "@app/common";
 import { dbContext } from "./dbContext";
+import {
+  ENCRYPTED_VFS_MAIN_ACCOUNT,
+  canCreateEmpty,
+  ensureEncryptedVfs,
+  shutdownEncryptedVfs,
+} from "./encryptedSqlite";
 
 const { getPrisma, getDBConstants, runPrismaCommand } =
   commonFacade as unknown as IFacade;
@@ -22,10 +29,14 @@ process.env.DATABASE_URL = `file:${dbPath}`;
 type PrismaRuntime = Awaited<ReturnType<typeof getPrisma>>;
 let _prisma: PrismaRuntime | null = null;
 let _prismaPromise: Promise<PrismaRuntime> | null = null;
+// The encrypted VFS must be the default VFS before the first open, so every
+// connect goes through ensureEncryptedVfs first. ensureEncryptedVfs is
+// idempotent per path and serialized internally.
 function loadPrismaRuntime(): Promise<PrismaRuntime> {
   if (_prisma) return Promise.resolve(_prisma);
   if (!_prismaPromise) {
-    _prismaPromise = getPrisma(dbContext)
+    _prismaPromise = ensureEncryptedVfs(dbPath, ENCRYPTED_VFS_MAIN_ACCOUNT)
+      .then(() => getPrisma(dbContext))
       .then((runtime) => {
         _prisma = runtime;
         return runtime;
@@ -36,7 +47,6 @@ function loadPrismaRuntime(): Promise<PrismaRuntime> {
   }
   return _prismaPromise;
 }
-const prismaPromise = loadPrismaRuntime();
 
 // Prisma 8 uses ControlClient for runtime migrations: dbUpdate is idempotent and
 // auto-detects diffs, eliminating the need for the v7 timestamp-comparison logic
@@ -47,12 +57,22 @@ const runPrisma = () => runPrismaCommand({ ctx: dbContext });
 // renderer go live immediately. On a needs-migration launch there is a window
 // where initDB is applying the migration — a query arriving in that window would
 // race. This promise gates every IPC query until initDB settles, so early renderer
-// calls queue instead of racing. Resolved in initDB's finally (even on failure)
-// so a migration error surfaces as a normal query error rather than a hang.
+// calls queue instead of racing.
+//
+// Unlike before the VFS, this gate is rejected (not resolved) on failure. A
+// failed ensureEncryptedVfs means the file key is unavailable or the file is
+// not a format we can open; letting queries through at that point would run
+// them against the wrong database or create an empty one. Queries now fail.
 let resolveDBReady: () => void;
-const dbReady = new Promise<void>((resolve) => {
+let rejectDBReady: (reason?: unknown) => void;
+const dbReady = new Promise<void>((resolve, reject) => {
   resolveDBReady = resolve;
+  rejectDBReady = reject;
 });
+// dbReady is rejected on a failed init. If no IPC query ever awaits it, that
+// rejection is unobserved and Node reports it as unhandled. The real error is
+// already logged and rethrown by initDB, so swallow it on this branch only.
+void dbReady.catch(() => undefined);
 
 export async function handlePersistenceAction(
   _,
@@ -62,7 +82,7 @@ export async function handlePersistenceAction(
 ) {
   try {
     await dbReady;
-    const prisma = await prismaPromise;
+    const prisma = await loadPrismaRuntime();
     // v8: models are already instantiated on prisma.Account / .Thread / .ThreadMessage
     const m = prisma[model];
     if (!m) throw new Error(`model ${model} not found`);
@@ -74,13 +94,19 @@ export async function handlePersistenceAction(
 }
 
 export async function initDB() {
-  const dbExists = fs.existsSync(dbPath);
-  if (!dbExists) {
-    // Fresh DB: touch the file so runPrisma (ControlClient) can connect
-    fs.closeSync(fs.openSync(dbPath, "w"));
-  }
-
   try {
+    // Load the DLL, resolve the file key, and migrate a plaintext database to
+    // EVFS1 if needed — all before anything opens the file.
+    await ensureEncryptedVfs(dbPath, ENCRYPTED_VFS_MAIN_ACCOUNT);
+
+    // Fresh DB: touch the file so runPrisma (ControlClient) can connect.
+    // canCreateEmpty, not !existsSync: an empty file must not be created on top
+    // of a half-finished migration, where the real data is still in the
+    // .plaintext-bak or .encrypting sibling and would be shadowed by it.
+    if (canCreateEmpty(dbPath)) {
+      fs.closeSync(fs.openSync(dbPath, "w"));
+    }
+
     // Prisma 8 ControlClient: dbUpdate is idempotent. It auto-detects diffs between
     // the contract and the DB state, applying only what's needed. No need to query
     // _prisma_migrations or compare timestamps — just call it unconditionally.
@@ -91,13 +117,29 @@ export async function initDB() {
     );
     await runPrisma();
     console.log("%c ✓ Migration check complete", "color: green");
-  } catch (e) {
-    console.error("× Migration failed.", e);
-    throw e;
-  } finally {
     // Open the gate — queued IPC queries now run against a live, migrated DB.
     // No need to disconnect/reconnect in v8: the ControlClient is a separate
     // connection that closes after dbUpdate; the ORM runtime stays open.
     resolveDBReady();
+  } catch (e) {
+    console.error("× Migration failed.", (e as Error)?.message);
+    rejectDBReady(e);
+    throw e;
   }
 }
+
+// Erase the process-held file key on the way out. before-quit is deferred once
+// so the synchronous shutdown completes before the process goes away.
+let fileKeyWipeStarted = false;
+app.on("before-quit", (event) => {
+  if (fileKeyWipeStarted) return;
+  fileKeyWipeStarted = true;
+  event.preventDefault();
+  try {
+    shutdownEncryptedVfs();
+  } catch (error) {
+    console.error("[db] encrypted vfs shutdown", error);
+  } finally {
+    app.quit();
+  }
+});

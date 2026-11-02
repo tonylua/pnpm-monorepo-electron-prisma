@@ -18,14 +18,22 @@ files:
 asarUnpack:
   - resources/**
 # Prisma 7 is Rust-free: no query/schema engine binaries are shipped.
-# node:sqlite (built into Electron's Node runtime) is the database driver,
-# so there are NO native modules to unpack either. We only ship the SQL
-# migration files (applied at runtime) plus the seed storage.
+# node:sqlite (built into Electron's Node runtime) is the database driver, so
+# there are no Node native addons to rebuild or unpack. We ship the SQL
+# migration files (applied at runtime), the seed storage, and the SQLite
+# loadable extension that provides the encrypted VFS (see below).
 extraResources:
   - from: ../../packages/common/src/prisma/migrations
     to: prisma/migrations
   - from: ../../packages/common/dist/storage
     to: storage
+  # SQLite loadable extension registering the encrypted VFS. It is NOT a Node
+  # native addon, so npmRebuild: false still holds and nothing links a second
+  # copy of SQLite. It must sit outside the asar (SQLite opens it by OS path),
+  # which is why it ships via extraResources rather than files. encryptedSqlite
+  # resolves it at process.resourcesPath/encrypted_vfs.dll in production.
+  - from: resources/encrypted_vfs.dll
+    to: ./
 win:
   executableName: myApp
   signExts: false
