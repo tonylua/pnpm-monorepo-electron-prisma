@@ -176,15 +176,58 @@ async function prepareOne(filePath: string, key: Buffer): Promise<void> {
 async function loadVfs(): Promise<void> {
   if (bootstrap) return;
   const dll = encryptedVfsDll();
-  if (!fs.existsSync(dll)) throw new Error("VFS_UNAVAILABLE");
-  const { DatabaseSync } = sqliteModule();
-  bootstrap = new DatabaseSync(":memory:", { allowExtension: true });
-  bootstrap.loadExtension(dll);
-  bootstrap.enableLoadExtension(false);
-  const activated = bootstrap
-    .prepare("SELECT encrypted_vfs_activate() AS name")
-    .get();
-  if (activated.name !== "encrypted-vfs") throw new Error("VFS_INCOMPATIBLE");
+
+  if (!fs.existsSync(dll)) {
+    console.error("[encryptedSqlite] DLL 文件不存在:", dll);
+    throw new Error("VFS_UNAVAILABLE");
+  }
+
+  console.info("[encryptedSqlite] 加载 VFS 扩展:", dll);
+
+  try {
+    const { DatabaseSync } = sqliteModule();
+    bootstrap = new DatabaseSync(":memory:", { allowExtension: true });
+    bootstrap.loadExtension(dll);
+    bootstrap.enableLoadExtension(false);
+    const activated = bootstrap
+      .prepare("SELECT encrypted_vfs_activate() AS name")
+      .get();
+    if (activated.name !== "encrypted-vfs") {
+      console.error(
+        "[encryptedSqlite] VFS 激活失败，返回名称:",
+        activated.name,
+      );
+      throw new Error("VFS_INCOMPATIBLE");
+    }
+    console.info("[encryptedSqlite] VFS 加载成功");
+  } catch (error) {
+    const errorCode = (error as { code?: string })?.code;
+    const errorMessage = (error as Error)?.message;
+    console.error("[encryptedSqlite] 加载 VFS 扩展失败");
+    console.error("  DLL 路径:", dll);
+    console.error("  文件存在:", fs.existsSync(dll));
+    console.error(
+      "  文件大小:",
+      fs.existsSync(dll) ? fs.statSync(dll).size : "N/A",
+    );
+    console.error("  错误代码:", errorCode);
+    console.error("  错误信息:", errorMessage);
+    console.error("  完整错误:", error);
+
+    if (
+      errorCode === "ERR_DLOPEN_FAILED" ||
+      errorMessage?.includes("找不到指定的模块")
+    ) {
+      console.error(
+        "⚠️  可能原因：encrypted_vfs.dll 依赖的运行时库缺失（如 VCRUNTIME140.dll）",
+      );
+      console.error(
+        "   建议：检查用户机器是否安装了 Visual C++ Redistributable 2015-2022",
+      );
+    }
+
+    throw error;
+  }
 }
 
 async function preparePath(filePath: string, account: string): Promise<void> {
